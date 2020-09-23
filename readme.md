@@ -2,20 +2,74 @@
 
 ---
 JDocs (JSON Documents) is a JSON manipulation library.
-It completely eliminates the need to have model classes and objects and instead works directly
-on the JSON document. Once you use this library, you may never ever
+It completely eliminates the need to have model / POJO classes and instead works directly
+on the JSON document. Once you use this library, you may never 
 want to return to using Java model classes or using JSON schema for JSON document validation.
 
 ---
 
-#### JDocs Maven Coordinates
-JDocs is packaged as a jar file which can be included in your application using the below Maven coordinates:
+#### Getting JDocs package
+
+[ ![Download](https://api.bintray.com/packages/americanexpress/maven/com.americanexpress.unify.jdocs/images/download.svg) ](https://bintray.com/americanexpress/maven/com.americanexpress.unify.jdocs/_latestVersion)
+
+JDocs is available as a jar file in Bintray JCenter with the following Maven coordinates. The latest
+version is available in the version badge on this page:
 
 ````pom
 <groupId>com.americanexpress.unify.jdocs</groupId>
 <artifactId>unify-jdocs</artifactId>
-<version>0.0.1</version>
+<version>x.y.z</version>
+<type>pom</type>
 ````
+
+In order to fetch JDocs from JCenter using Maven, include the following in your Maven settings.xml file
+as shown below.
+
+````pom
+<?xml version="1.0" encoding="UTF-8" ?>
+<settings xsi:schemaLocation='http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd'
+          xmlns='http://maven.apache.org/SETTINGS/1.0.0' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'>
+    
+    <profiles>
+        <profile>
+            <repositories>
+                <repository>
+                    <snapshots>
+                        <enabled>false</enabled>
+                    </snapshots>
+                    <id>central</id>
+                    <name>bintray</name>
+                    <url>https://jcenter.bintray.com</url>
+                </repository>
+            </repositories>
+            <pluginRepositories>
+                <pluginRepository>
+                    <snapshots>
+                        <enabled>false</enabled>
+                    </snapshots>
+                    <id>central</id>
+                    <name>bintray-plugins</name>
+                    <url>https://jcenter.bintray.com</url>
+                </pluginRepository>
+            </pluginRepositories>
+            <id>bintray</id>
+        </profile>
+    </profiles>
+    <activeProfiles>
+        <activeProfile>bintray</activeProfile>
+    </activeProfiles>
+</settings>
+````
+
+For Gradle, please use the following:
+````gradle
+repositories {
+    maven {
+        url  "https://jcenter.bintray.com" 
+    }
+}
+````
+
 ---
 
 #### Primer on model classes, marshalling and unmarshalling
@@ -1101,7 +1155,7 @@ JDocument.loadDocumentTypes(type, json);
 **Creating typed documents**
 
 ```java
-Document d = new JDocument("model");
+Document d = new JDocument("model", null);
 ```
 
 The above creates an empty document which is tied to a model document named as `model`
@@ -1109,7 +1163,7 @@ The above creates an empty document which is tied to a model document named as `
 
 ```java
 String s = "..."; // s contains the contents of a JSON document
-Document d = new JDocument(s, "model");
+Document d = new JDocument("model", s);
 ```
 
 The above creates a typed `JDocument` from an existing JSON document stored in the string `s`.
@@ -1122,7 +1176,7 @@ For example, for snippet 4 above, the following calls will succeed as the paths 
 constraints on the elements are all valid:
 
 ```java
-Document d = new JDocument("model");
+Document d = new JDocument("model", null);
 d.setString("$.first_name", "Deepak1");
 d.setString("$.phones[0].type", "Home");
 d.setInteger("$.phones[0].number", 333333);
@@ -1376,8 +1430,8 @@ documents need to be typed documents having the same model.
 Lets take snippet 6 as the starting point for understanding. Consider the following code:
 
 ```java
-Document to = new JDocument(fromJson, "model"); // fromJson contains snippet 6 json
-Document from = new JDocument("model"); // create an empty document of type model
+Document to = new JDocument("model", fromJson); // fromJson contains snippet 6 json
+Document from = new JDocument("model", null); // create an empty document of type model
 from.setString("$.phones[0].phone_type", "Office");
 from.setString("$.phones[0].number", "888888");
 from.setString("$.phones[0].country", "USA");
@@ -1563,19 +1617,12 @@ Go through the unit test cases in the source code. Unit test cases are available
 
 Provide us feedback. We would love to hear from you.
 
-##### Author and lead maintainer:
-Deepak Arora, deepak.arora5@aexp.com, GitHub: @deepakarora3
+---
 
-##### Other maintainers:
-Shamanth B Chandrashekar, shamanth.b.chandrashekar@aexp.com, GitHub: shamanth9
+##### Author:
+Deepak Arora, GitHub: @deepakarora3, Twitter: @DeepakAroraHi
 
-Deepika Sidana, deepika.sidana3@aexp.com, GitHub: deepikasidana89
-
-Jyotsna Gandhi, jyotsna.gandhi1@aexp.com, GitHub: jodube21
-
-Shailendra Bade, shailendra.bade@aexp.com, GitHub: finaspirant
-
-Phil Lundrigan, phil.lundrigan@aexp.com, GitHub: lundriganp 
+---
 
 ## Contributing
 
@@ -1584,7 +1631,7 @@ any Open Source Project managed by the American Express Open Source Community mu
 an Agreement indicating agreement to the terms below. Except for the rights granted in this 
 Agreement to American Express and to recipients of software distributed by American Express, You
 reserve all right, title, and interest, if any, in and to Your Contributions. Please
-[fill out the Agreement](https://cla-assistant.io/americanexpress/unify-amexdeus).
+[fill out the Agreement](https://cla-assistant.io/americanexpress/unify-jdocs).
 
 ## License
 
