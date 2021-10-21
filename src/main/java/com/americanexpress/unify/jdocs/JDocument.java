@@ -16,15 +16,20 @@ package com.americanexpress.unify.jdocs;
 
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.core.util.DefaultIndenter;
+import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.ObjectWriter;
 import com.fasterxml.jackson.databind.node.*;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.text.MessageFormat;
 import java.time.format.DateTimeFormatter;
+import java.time.format.ResolverStyle;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Matcher;
@@ -49,13 +54,14 @@ public class JDocument implements Document {
   private String type = "";
 
   // logger
-  private static Logger logger = LogManager.getLogger(JDocument.class);
-
+  private static final Logger logger = LoggerFactory.getLogger(JDocument.class);
   // root json node of the document
   protected JsonNode rootNode = null;
 
   // one and only one object mapper -> object mappers are thread safe!!!
-  protected static ObjectMapper objectMapper = new ObjectMapper().configure(JsonParser.Feature.ALLOW_COMMENTS, true);
+  protected static final ObjectMapper objectMapper = new ObjectMapper().configure(JsonParser.Feature.ALLOW_COMMENTS, true);
+
+  private static final ObjectWriter objectWriter = objectMapper.writer(new DefaultPrettyPrinter().withObjectIndenter(new DefaultIndenter().withLinefeed("\n")));
 
   public JDocument() {
     try {
@@ -95,6 +101,9 @@ public class JDocument implements Document {
     }
   }
 
+  public static void initDocumentTypes(String doc_models, String s) {
+  }
+
   @Override
   public String getType() {
     return type;
@@ -106,7 +115,7 @@ public class JDocument implements Document {
       throw new UnifyException("jdoc_err_60");
     }
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE, vargs);
+    validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
     String modelPath = getModelPath(path);
     checkPathExistsInModel(modelPath);
     String format = getFieldFormat(path, modelPath, false);
@@ -124,7 +133,7 @@ public class JDocument implements Document {
       throw new UnifyException("jdoc_err_60");
     }
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE, vargs);
+    validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
     String modelPath = getModelPath(path);
     checkPathExistsInModel(modelPath);
     String format = getFieldFormat(path, modelPath, true);
@@ -173,7 +182,8 @@ public class JDocument implements Document {
     }
   }
 
-  private final void validate(String type) {
+  @Override
+  public final void validate(String type) {
     // function to validate the contents of the whole document
     Document md = docModels.get(type);
     List<String> errorList = validate(((JDocument)md).rootNode, rootNode, "$.", type);
@@ -250,7 +260,7 @@ public class JDocument implements Document {
         break;
       }
 
-      JsonNode node = traverse(rootNode, tokenList, false);
+      JsonNode node = traverse(rootNode, tokenList, false, false);
 
       if (node == null) {
         break;
@@ -271,7 +281,7 @@ public class JDocument implements Document {
   @Override
   public boolean pathExists(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.PATH_EXISTS, PathAccessType.OBJECT, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.PATH_EXISTS, PathAccessType.OBJECT);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       checkPathExistsInModel(getModelPath(path));
@@ -358,7 +368,7 @@ public class JDocument implements Document {
   @Override
   public int getArrayIndex(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_INDEX, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_INDEX, PathAccessType.VALUE);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       checkPathExistsInModel(getModelPath(path));
@@ -389,7 +399,7 @@ public class JDocument implements Document {
   @Override
   public int getArraySize(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_SIZE, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_SIZE, PathAccessType.VALUE);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       checkPathExistsInModel(getModelPath(path));
@@ -415,7 +425,7 @@ public class JDocument implements Document {
     String s = null;
 
     try {
-      s = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(rootNode);
+      s = objectWriter.writeValueAsString(rootNode);
     }
     catch (JsonProcessingException ex) {
       throw new UnifyException("jdoc_err_1", ex);
@@ -448,7 +458,17 @@ public class JDocument implements Document {
 
   private static JsonNode traverseArrayEmpty(JsonNode node, ArrayToken token, boolean createNode) {
     JsonNode retNode = null;
-    JsonNode arrayNode = node.get(token.getField());
+    JsonNode arrayNode = null;
+
+    // special handling for document that starts with an array
+    String fieldName = token.getField();
+    if (fieldName.isEmpty() == true) {
+      arrayNode = node;
+    }
+    else {
+      arrayNode = node.get(fieldName);
+    }
+
 
     while (true) {
       if (arrayNode == null) {
@@ -474,6 +494,10 @@ public class JDocument implements Document {
   }
 
   private static JsonNode traverseArrayIndex(JsonNode node, ArrayToken token, boolean createNode) {
+    return traverseArrayIndex(node, token, createNode, true);
+  }
+
+  private static JsonNode traverseArrayIndex(JsonNode node, ArrayToken token, boolean createNode, boolean throwException) {
     JsonNode retNode = null;
     int index = token.getFilter().getIndex();
 
@@ -492,8 +516,15 @@ public class JDocument implements Document {
         }
       }
       else {
-        if (index >= arrayNode.size()) {
-          throw new UnifyException("jdoc_err_8", token.getField());
+        int size = arrayNode.size();
+        if ((size > 0) && (index >= size)) {
+          if (throwException == true) {
+            throw new UnifyException("jdoc_err_8", token.getField());
+          }
+          else {
+            retNode = null;
+            break;
+          }
         }
       }
 
@@ -550,7 +581,7 @@ public class JDocument implements Document {
     return retNode;
   }
 
-  private static JsonNode traverse(JsonNode rootNode, List<Token> tokenList, boolean createNode) {
+  private static JsonNode traverse(JsonNode rootNode, List<Token> tokenList, boolean createNode, boolean throwException) {
     JsonNode node = rootNode;
 
     for (Token token : tokenList) {
@@ -570,7 +601,7 @@ public class JDocument implements Document {
 
         // handle index node
         if (arrayToken.getFilter().getType() == ArrayToken.FilterType.INDEX) {
-          node = traverseArrayIndex(node, arrayToken, createNode);
+          node = traverseArrayIndex(node, arrayToken, createNode, throwException);
           break;
         }
 
@@ -589,6 +620,10 @@ public class JDocument implements Document {
     }
 
     return node;
+  }
+
+  private static JsonNode traverse(JsonNode rootNode, List<Token> tokenList, boolean createNode) {
+    return traverse(rootNode, tokenList, createNode, true);
   }
 
   private static boolean isArrayTokenDefinite(ArrayToken arrayToken) {
@@ -726,6 +761,11 @@ public class JDocument implements Document {
               break;
             }
 
+            if (node.isBigDecimal()) {
+              value = node.decimalValue();
+              break;
+            }
+
             throw new UnifyException("jdoc_err_13", path);
           }
 
@@ -804,7 +844,16 @@ public class JDocument implements Document {
       node.put(field, (Boolean)value);
     }
     else {
-      throw new UnifyException("jdoc_err_15", value.getClass().getCanonicalName());
+      // do this in case we want to allow nulls to be stored
+      if (value == null) {
+        node.set(field, null);
+      }
+      else {
+        throw new UnifyException("jdoc_err_15", value.getClass().getCanonicalName());
+      }
+
+      // at present just throw an exception
+      // throw new UnifyException("jdoc_err_15", value.getClass().getCanonicalName());
     }
 
   }
@@ -818,6 +867,11 @@ public class JDocument implements Document {
       if (index < size) {
         // remove and insert
         node.remove(index);
+
+        if (value == null) {
+          node.insertNull(index);
+          break;
+        }
 
         if (value instanceof String) {
           node.insert(index, (String)value);
@@ -843,6 +897,11 @@ public class JDocument implements Document {
 
       if (index == size) {
         // add at the end
+        if (value == null) {
+          node.insertNull(index);
+          break;
+        }
+
         if (value instanceof String) {
           node.add((String)value);
         }
@@ -957,7 +1016,14 @@ public class JDocument implements Document {
             }
             else if (fieldNode.isDouble()) {
               BigDecimal bigDecimalValue = fieldNode.decimalValue();
-              if (bigDecimalValue == new BigDecimal(filterValue)) {
+              if (bigDecimalValue.equals(new BigDecimal(filterValue))) {
+                found = true;
+                break outer;
+              }
+            }
+            else if (fieldNode.isBigDecimal()) {
+              BigDecimal bigDecimalValue = fieldNode.decimalValue();
+              if (bigDecimalValue.equals(new BigDecimal(filterValue))) {
                 found = true;
                 break outer;
               }
@@ -1002,7 +1068,7 @@ public class JDocument implements Document {
     String tokenPath = "$";
 
     if (value == null) {
-      throw new UnifyException("jdoc_err_20", path);
+      // throw new UnifyException("jdoc_err_20", path);
     }
 
     // traverse the document. If we find a node corresponding to the path token and it matches the type
@@ -1085,7 +1151,7 @@ public class JDocument implements Document {
     return sb.toString();
   }
 
-  protected List<Token> validatePath(String path, CONSTS_JDOCS.API api, PathAccessType pat, String... vargs) {
+  protected List<Token> validatePath(String path, CONSTS_JDOCS.API api, PathAccessType pat) {
     List<Token> tokenList = parse(path);
     validatePath1(path, api, tokenList, pat);
     return tokenList;
@@ -1094,7 +1160,7 @@ public class JDocument implements Document {
   @Override
   public Object getValue(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
     if (isTyped()) {
       checkPathExistsInModel(getModelPath(path));
     }
@@ -1104,7 +1170,7 @@ public class JDocument implements Document {
   @Override
   public String getString(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
     if (isTyped()) {
       checkPathExistsInModel(getModelPath(path));
     }
@@ -1114,7 +1180,7 @@ public class JDocument implements Document {
   @Override
   public Integer getInteger(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
     if (isTyped()) {
       checkPathExistsInModel(getModelPath(path));
     }
@@ -1124,7 +1190,7 @@ public class JDocument implements Document {
   @Override
   public Boolean getBoolean(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
     if (isTyped()) {
       checkPathExistsInModel(getModelPath(path));
     }
@@ -1134,7 +1200,7 @@ public class JDocument implements Document {
   @Override
   public Long getLong(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
     if (isTyped()) {
       checkPathExistsInModel(getModelPath(path));
     }
@@ -1144,7 +1210,7 @@ public class JDocument implements Document {
   @Override
   public BigDecimal getBigDecimal(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
     if (isTyped()) {
       checkPathExistsInModel(getModelPath(path));
     }
@@ -1152,9 +1218,19 @@ public class JDocument implements Document {
   }
 
   @Override
+  public Object getArrayValue(String path, String... vargs) {
+    path = getStaticPath(path, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE);
+    if (isTyped()) {
+      checkPathExistsInModel(getModelPath(path));
+    }
+    return getValue(path, null, tokenList);
+  }
+
+  @Override
   public String getArrayValueString(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE);
     if (isTyped()) {
       checkPathExistsInModel(getModelPath(path));
     }
@@ -1164,7 +1240,7 @@ public class JDocument implements Document {
   @Override
   public Integer getArrayValueInteger(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE);
     if (isTyped()) {
       checkPathExistsInModel(getModelPath(path));
     }
@@ -1174,7 +1250,7 @@ public class JDocument implements Document {
   @Override
   public Boolean getArrayValueBoolean(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE);
     if (isTyped()) {
       checkPathExistsInModel(getModelPath(path));
     }
@@ -1184,7 +1260,7 @@ public class JDocument implements Document {
   @Override
   public Long getArrayValueLong(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE);
     if (isTyped()) {
       checkPathExistsInModel(getModelPath(path));
     }
@@ -1194,7 +1270,7 @@ public class JDocument implements Document {
   @Override
   public BigDecimal getArrayValueBigDecimal(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE);
     if (isTyped()) {
       checkPathExistsInModel(getModelPath(path));
     }
@@ -1204,7 +1280,7 @@ public class JDocument implements Document {
   @Override
   public void setString(String path, String value, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET, PathAccessType.VALUE);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       validateField(path, value);
@@ -1215,7 +1291,7 @@ public class JDocument implements Document {
   @Override
   public void setInteger(String path, int value, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET, PathAccessType.VALUE);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       validateField(path, value);
@@ -1226,7 +1302,7 @@ public class JDocument implements Document {
   @Override
   public void setBoolean(String path, boolean value, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET, PathAccessType.VALUE);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       validateField(path, value);
@@ -1237,7 +1313,7 @@ public class JDocument implements Document {
   @Override
   public void setLong(String path, long value, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET, PathAccessType.VALUE);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       validateField(path, value);
@@ -1248,7 +1324,7 @@ public class JDocument implements Document {
   @Override
   public void setBigDecimal(String path, BigDecimal value, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET, PathAccessType.VALUE);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       validateField(path, value);
@@ -1259,7 +1335,7 @@ public class JDocument implements Document {
   @Override
   public void setArrayValueString(String path, String value, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET_ARRAY_VALUE, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET_ARRAY_VALUE, PathAccessType.VALUE);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       validateField(path, value, true);
@@ -1270,7 +1346,7 @@ public class JDocument implements Document {
   @Override
   public void setArrayValueInteger(String path, int value, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET_ARRAY_VALUE, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET_ARRAY_VALUE, PathAccessType.VALUE);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       validateField(path, value, true);
@@ -1281,7 +1357,7 @@ public class JDocument implements Document {
   @Override
   public void setArrayValueBoolean(String path, boolean value, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET_ARRAY_VALUE, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET_ARRAY_VALUE, PathAccessType.VALUE);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       validateField(path, value, true);
@@ -1292,7 +1368,7 @@ public class JDocument implements Document {
   @Override
   public void setArrayValueLong(String path, long value, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET_ARRAY_VALUE, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET_ARRAY_VALUE, PathAccessType.VALUE);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       validateField(path, value, true);
@@ -1303,7 +1379,7 @@ public class JDocument implements Document {
   @Override
   public void setArrayValueBigDecimal(String path, BigDecimal value, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET_ARRAY_VALUE, PathAccessType.VALUE, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.SET_ARRAY_VALUE, PathAccessType.VALUE);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       validateField(path, value, true);
@@ -1319,6 +1395,7 @@ public class JDocument implements Document {
       String[] vargs1 = new String[vargs.length - count];
       for (int i = 0; i < vargs1.length; i++) {
         vargs1[i] = vargs[count];
+        count++;
       }
       toPath = getStaticPath(toPath, vargs1);
     }
@@ -1468,13 +1545,19 @@ public class JDocument implements Document {
   @Override
   public void deletePath(String path, String... vargs) {
     path = getStaticPath(path, vargs);
-    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.DELETE_PATH, PathAccessType.OBJECT, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.DELETE_PATH, PathAccessType.OBJECT);
     if (isTyped()) {
       validateFilterNames(path, tokenList);
       checkPathExistsInModel(getModelPath(path));
     }
 
-    deletePath(path, tokenList);
+    // we first check if the path exists in the document only then do we go ahead to delete it
+    if (pathExists(path) == true) {
+      deletePath(path, tokenList);
+    }
+    else {
+      // nothing to do
+    }
   }
 
   protected List<Token> parse(String path) {
@@ -1549,6 +1632,7 @@ public class JDocument implements Document {
   // typed document methods
 
   public static void loadDocumentModel(String type, String json) {
+    logger.info("Loading document model -> " + type);
     try {
       json = insertReferredModels(json);
     }
@@ -1559,17 +1643,20 @@ public class JDocument implements Document {
 
     Document d = new JDocument(json);
     setDocumentModel(type, d);
-    logger.info("Successfully loaded document model -> " + type);
   }
 
   public static void setDocumentModel(String type, Document model) {
     docModels.put(type, model);
   }
 
+  public static boolean isDocumentModelLoaded(String type) {
+    return docModels.containsKey(type);
+  }
+
   public static void close() {
     if (docModels != null) {
+      logger.info("Unloading document models");
       docModels = null;
-      logger.info("Successfully unloaded document models");
     }
     else {
       logger.info("Document models have already been unloaded");
@@ -1662,7 +1749,7 @@ public class JDocument implements Document {
   private void validateField(String path, Object value, boolean isValueArray) {
     String modelPath = getModelPath(path);
     String format = getFieldFormat(path, modelPath, isValueArray);
-    validateField(format, value, modelPath, type);
+    validateField(format, value, modelPath, null, type);
   }
 
   private void processErrors(List<String> errorList) {
@@ -1826,6 +1913,9 @@ public class JDocument implements Document {
           else if (fromFieldNode.isDouble()) {
             valueNode = new DecimalNode(fromFieldNode.decimalValue());
           }
+          else if (fromFieldNode.isBigDecimal()) {
+            valueNode = new DecimalNode(fromFieldNode.decimalValue());
+          }
           else {
             throw new UnifyException("jdoc_err_43", field);
           }
@@ -1876,14 +1966,30 @@ public class JDocument implements Document {
         throw new UnifyException("jdoc_err_63", type, path, format);
       }
     }
-
     return node;
   }
 
-  private static void validateField(String format, Object value, String path, String type) {
+  private static void throwExceptionOrSetErrorList(String errorCode, String path, List<String> errorList) {
+    if (errorList == null) {
+      throw new UnifyException(errorCode, path);
+    }
+    else {
+      String msg = ERRORS_JDOCS.getErrorMessage(errorCode);
+      if (msg == null) {
+        logger.error("Error code {} not found in ErrorMap", errorCode);
+        msg = "";
+      }
+      else {
+        msg = MessageFormat.format(msg, path);
+      }
+      errorList.add(msg);
+    }
+  }
+
+  private static void validateField(String format, Object value, String path, List<String> errorList, String type) {
     // "{\"field\":\"field_name\"}"
     // "{\"type\":\"string\", \"regex\":\"\\\\w{17,17}\"}"
-    // "{\"type\":\"date\", \"format\":\"yyyy-MM-dd HH:mm:ss.SSS GMT\"}"
+    // "{\"type\":\"date\", \"format\":\"uuuu-MM-dd HH:mm:ss.SSS GMT\"}"
     // key is optional
     // type is mandatory
     // format
@@ -1906,7 +2012,7 @@ public class JDocument implements Document {
           isNullAllowed = node.get(CONSTS_JDOCS.FORMAT_FIELDS.NULL_ALLOWED).booleanValue();
         }
         if (isNullAllowed == false) {
-          throw new UnifyException("jdoc_err_36", path);
+          throwExceptionOrSetErrorList("jdoc_err_36", path, errorList);
         }
 
         break;
@@ -1917,31 +2023,31 @@ public class JDocument implements Document {
       switch (dataType) {
         case STRING:
           if ((value instanceof String) == false) {
-            throw new UnifyException("jdoc_err_37", path);
+            throwExceptionOrSetErrorList("jdoc_err_37", path, errorList);
           }
           break;
 
         case BOOLEAN:
           if ((value instanceof Boolean) == false) {
-            throw new UnifyException("jdoc_err_37", path);
+            throwExceptionOrSetErrorList("jdoc_err_37", path, errorList);
           }
           break;
 
         case DATE:
           if ((value instanceof String) == false) {
-            throw new UnifyException("jdoc_err_37", path);
+            throwExceptionOrSetErrorList("jdoc_err_37", path, errorList);
           }
           break;
 
         case INTEGER:
           if (((value instanceof Integer) == false)) {
-            throw new UnifyException("jdoc_err_37", path);
+            throwExceptionOrSetErrorList("jdoc_err_37", path, errorList);
           }
           break;
 
         case LONG:
           if (((value instanceof Long) == false)) {
-            throw new UnifyException("jdoc_err_37", path);
+            throwExceptionOrSetErrorList("jdoc_err_37", path, errorList);
           }
           break;
 
@@ -1950,7 +2056,7 @@ public class JDocument implements Document {
           // hence when we read the document and construct the typed document we
           // will need to check against int and long data types as well
           if (((value instanceof BigDecimal) == false) && ((value instanceof Integer) == false) && ((value instanceof Long) == false)) {
-            throw new UnifyException("jdoc_err_37", path);
+            throwExceptionOrSetErrorList("jdoc_err_37", path, errorList);
           }
           break;
 
@@ -1977,7 +2083,7 @@ public class JDocument implements Document {
             Matcher matcher = pattern.matcher(s);
             boolean matches = matcher.matches();
             if (matches == false) {
-              throw new UnifyException("jdoc_err_54", path);
+              throwExceptionOrSetErrorList("jdoc_err_54", path, errorList);
             }
           }
           break;
@@ -1988,13 +2094,13 @@ public class JDocument implements Document {
           String fieldValue = node.get(CONSTS_JDOCS.FORMAT_FIELDS.FORMAT).asText();
           if (fieldValue.isEmpty() == false) {
             try {
-              DateTimeFormatter dfs = DateTimeFormatter.ofPattern(fieldValue);
+              DateTimeFormatter dfs = DateTimeFormatter.ofPattern(fieldValue).withResolverStyle(ResolverStyle.STRICT);
               if (value.toString().isEmpty() == false) {
                 dfs.parse(value.toString());
               }
             }
             catch (Exception e) {
-              throw new UnifyException("jdoc_err_51", path);
+              throwExceptionOrSetErrorList("jdoc_err_51", path, errorList);
             }
           }
           break;
@@ -2132,13 +2238,18 @@ public class JDocument implements Document {
   }
 
   private static void validate(JsonNode modelNode, JsonNode docNode, String basePath, List<String> errorList, String type) {
+    // special handling in case the document starts with an array
+    if ((modelNode.getNodeType().equals(JsonNodeType.ARRAY) == true) && (basePath.equals("$."))) {
+      modelNode = modelNode.get(0);
+    }
+
     // if the docNode is an array node then it will not have any fields and we need to handle it differently
     if (docNode.getNodeType() == JsonNodeType.ARRAY) {
       // running a loop for all elements of the updated ArrayNode
       for (int i = 0; i < docNode.size(); i++) {
         JsonNode docChildNode = docNode.get(i);
         JsonNode dmChildNode = modelNode;
-        validate(dmChildNode, docChildNode, basePath + "[0]" + ".", errorList, type);
+        validate(dmChildNode, docChildNode, basePath + "[" + i + "]" + ".", errorList, type);
       }
     }
     else {
@@ -2164,7 +2275,7 @@ public class JDocument implements Document {
             for (int i = 0; i < docFieldNode.size(); i++) {
               JsonNode docChildNode = docFieldNode.get(i);
               JsonNode dmChildNode = modelFieldNode.get(0);
-              validate(dmChildNode, docChildNode, basePath + docFieldName + "[0]" + ".", errorList, type);
+              validate(dmChildNode, docChildNode, basePath + docFieldName + "[" + i + "]" + ".", errorList, type);
             }
             break loop;
           }
@@ -2178,18 +2289,21 @@ public class JDocument implements Document {
             // we have reached a property object
             switch (docFieldNode.getNodeType()) {
               case BOOLEAN:
-                validateField(modelFieldNode.asText(), docFieldNode.asBoolean(), basePath + docFieldName, type);
+                validateField(modelFieldNode.asText(), docFieldNode.asBoolean(), basePath + docFieldName, errorList, type);
                 break;
 
               case NUMBER:
                 if (docFieldNode.isInt()) {
-                  validateField(modelFieldNode.asText(), docFieldNode.asInt(), basePath + docFieldName, type);
+                  validateField(modelFieldNode.asText(), docFieldNode.asInt(), basePath + docFieldName, errorList, type);
                 }
                 else if (docFieldNode.isLong()) {
-                  validateField(modelFieldNode.asText(), docFieldNode.asLong(), basePath + docFieldName, type);
+                  validateField(modelFieldNode.asText(), docFieldNode.asLong(), basePath + docFieldName, errorList, type);
                 }
                 else if (docFieldNode.isDouble()) {
-                  validateField(modelFieldNode.asText(), docFieldNode.decimalValue(), basePath + docFieldName, type);
+                  validateField(modelFieldNode.asText(), docFieldNode.decimalValue(), basePath + docFieldName, errorList, type);
+                }
+                else if (docFieldNode.isBigDecimal()) {
+                  validateField(modelFieldNode.asText(), docFieldNode.decimalValue(), basePath + docFieldName, errorList, type);
                 }
                 else {
                   throw new UnifyException("jdoc_err_44", basePath + docFieldName, docFieldNode.toString());
@@ -2197,11 +2311,11 @@ public class JDocument implements Document {
                 break;
 
               case STRING:
-                validateField(modelFieldNode.asText(), docFieldNode.asText(), basePath + docFieldName, type);
+                validateField(modelFieldNode.asText(), docFieldNode.asText(), basePath + docFieldName, errorList, type);
                 break;
 
               case NULL:
-                validateField(modelFieldNode.asText(), null, basePath + docFieldName, type);
+                validateField(modelFieldNode.asText(), null, basePath + docFieldName, errorList, type);
                 break;
 
               default:
@@ -2358,6 +2472,10 @@ public class JDocument implements Document {
               value = fieldNode.asDouble();
               dt = DataType.DECIMAL;
             }
+            else if (fieldNode.isBigDecimal()) {
+              value = fieldNode.asDouble();
+              dt = DataType.DECIMAL;
+            }
             else if (fieldNode.isLong()) {
               value = fieldNode.asLong();
               dt = DataType.LONG;
@@ -2474,6 +2592,14 @@ public class JDocument implements Document {
     }
 
     return diffInfoList;
+  }
+
+  public List<DiffInfo> getDifferences(String leftPath, Document right, String rightPath, boolean onlyDifferences) {
+    validatePath(leftPath, CONSTS_JDOCS.API.CONTENT, PathAccessType.OBJECT);
+    validatePath(rightPath, CONSTS_JDOCS.API.CONTENT, PathAccessType.OBJECT);
+    Document newLeft = getContent(leftPath, false, false);
+    Document newRight = right.getContent(rightPath, false, false);
+    return newLeft.getDifferences(newRight, onlyDifferences);
   }
 
 }

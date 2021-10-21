@@ -15,11 +15,13 @@
 package com.americanexpress.unify.jdocs;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Scanner;
+
+import static com.americanexpress.unify.jdocs.JDocument.objectMapper;
 
 /*
  * @author Deepak Arora
@@ -27,7 +29,7 @@ import java.util.Scanner;
 
 public class TestParsing {
 
-  private static Logger logger = LogManager.getLogger(TestParsing.class);
+  private static Logger logger = LoggerFactory.getLogger(TestParsing.class);
 
   /**
    * @param args
@@ -83,8 +85,8 @@ public class TestParsing {
       }
     }
 
-    JsonNode node = JDocument.objectMapper.readTree(json);
-    json = JDocument.objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(node);
+    JsonNode node = objectMapper.readTree(json);
+    json = objectMapper.writerWithDefaultPrettyPrinter().writeValueAsString(node);
     return json;
   }
 

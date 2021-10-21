@@ -139,6 +139,18 @@ public class DocumentTest {
 
     d.setInteger("$.value", 10);
     assertEquals(BigDecimal.valueOf(10), d.getBigDecimal("$.value"));
+
+    Document d1 = getTypedDocument("sample_8_model", null);
+    Document d2 = getTypedDocument("sample_8_model", null);
+    d2.setBigDecimal("$.decimal_value", BigDecimal.valueOf(45.876));
+    d1.merge(d2, null);
+
+    // test out of bound
+    UnifyException e = assertThrows(UnifyException.class, () -> {
+      Document td = getTypedDocument("sample_8_model", "/jdocs/sample_8.json");
+      td.getBigDecimal("$.values[10].val_1");
+    });
+
   }
 
   @Test
@@ -221,6 +233,9 @@ public class DocumentTest {
   void testDelete() {
     Document d = getBaseDocument("/jdocs/sample_1.json");
 
+    UnifyException e = null;
+
+    // nothing should happen
     d.deletePath("$.laksdlkj");
 
     boolean b = d.pathExists("$.members[0].phones[0].number");
@@ -243,11 +258,23 @@ public class DocumentTest {
 
     assertEquals(expected, actual);
 
-    // exception scenarios
-    UnifyException e = assertThrows(UnifyException.class, () -> {
-      d.deletePath("$.members[2]");
-    });
-    assertEquals("jdoc_err_17", e.getErrorCode());
+    // nothing should happen
+    d.deletePath("$.members[2]");
+    d.deletePath("$.members[0].phones[1]");
+
+    // just to show that we can specify [] to denote we are deleting an array block
+    d.deletePath("$.members[]");
+  }
+
+  @Test
+  void testDelete1() {
+    Document d = getBaseDocument("/jdocs/sample_1.json");
+    d.deletePath("$.members[]");
+    d.deletePath("$.id");
+    d.deletePath("$.info");
+    String expected = "{ }";
+    String actual = d.getPrettyPrintJson();
+    assertEquals(expected, actual);
   }
 
   @Test
@@ -266,6 +293,9 @@ public class DocumentTest {
     int size = d.getArraySize("$.members[]");
     assertEquals(size, 5);
 
+    size = d.getArraySize("$.membasdfsdfers[]");
+    assertEquals(size, 0);
+
     size = d.getArraySize("$.members[0].phones[]");
     assertEquals(size, 2);
 
@@ -277,7 +307,7 @@ public class DocumentTest {
 
     d = getTypedDocument("sample_12_model", null);
     size = d.getArraySize("$.application.members[]");
-    assert (size == 0);
+    assertEquals(size, 0);
   }
 
   @Test
@@ -310,6 +340,16 @@ public class DocumentTest {
     d.setArrayValueString("$.codes[3]", "3");
     s = d.getArrayValueString("$.codes[3]");
     assertEquals(s, "3");
+  }
+
+  @Test
+  void testNativeArrayValue() {
+    Document d = getBaseDocument("/jdocs/native_array2.json");
+    String s = (String)d.getArrayValue("$.valid_states[0].states[0]");
+    assertEquals(s, "AZ");
+
+    Integer code = (Integer)d.getArrayValue("$.valid_states[0].codes[0]");
+    assertEquals(code, new Integer(1));
   }
 
   @Test
@@ -371,6 +411,16 @@ public class DocumentTest {
     toDoc = getTypedDocument("sample_6_model", null);
     toDoc.setContent(fromDoc, "$.application.members[]", "$.application.members[]");
     expected = getCompressedJson("/jdocs/sample_6_4_expected.json");
+    actual = toDoc.getJson();
+    assertEquals(expected, actual);
+
+    // test case 6
+    fromDoc = getTypedDocument("sample_6_model", null);
+    fromDoc.setInteger("$.application.members[0].phones[0].docs[0].index", 0);
+    fromDoc.setString("$.application.members[0].phones[0].docs[0].name", "Deepak");
+    toDoc = getTypedDocument("sample_6_model", null);
+    toDoc.setContent(fromDoc, "$.application.members[0].phones[0].docs[%]", "$.application.members[%].phones[%].docs[%]", 0 + "", 0 + "", 0 + "", 0 + "");
+    expected = getCompressedJson("/jdocs/sample_6_5_expected.json");
     actual = toDoc.getJson();
     assertEquals(expected, actual);
   }
@@ -448,6 +498,11 @@ public class DocumentTest {
     assertEquals(b, true);
     b = d.pathExists("$.apdsfgplicants");
     assertEquals(b, false);
+
+    b = d.pathExists("$.members[3].phones");
+    assertEquals(b, false);
+    b = d.pathExists("$.members[0].laskdjfh");
+    assertEquals(b, false);
   }
 
   @Test
@@ -460,6 +515,18 @@ public class DocumentTest {
     String expected = getCompressedJson("/jdocs/sample_11_expected.json");
     String actual = master.getJson();
     assertEquals(expected, actual);
+  }
+
+  @Test
+  void testSetArrayNull() throws IOException {
+    Document d = getTypedDocument("sample_17_model", null);
+    d.setString("$.version", null);
+    d.setArrayValueString("$.names[0]", null);
+    d.setArrayValueString("$.names[1]", null);
+    d.setArrayValueString("$.names[2]", "deepak");
+
+    d = new JDocument();
+    d.setString("$.version", null);
   }
 
   @Test
@@ -502,6 +569,10 @@ public class DocumentTest {
 
   @Test
   void testRegex() {
+    //    Document d1 = getBaseDocument("/jdocs/sample_13_model.json");
+    //    String s = d1.getString("$.city");
+    //    Document d2 = new JDocument(s);
+    //    System.out.println(d2.getString("$.regex"));
     Document d = getTypedDocument("sample_13_model", "/jdocs/sample_13.json");
     assert (d != null);
   }
@@ -634,6 +705,81 @@ public class DocumentTest {
 
     ldt = d.getLeafNodeDataType("$.members[0].is_married");
     assertEquals(ldt.toString(), "boolean");
+  }
+
+  @Test
+  void testDate() {
+    Document d = getTypedDocument("sample_18_model", null);
+
+    UnifyException e = assertThrows(UnifyException.class, () -> {
+      d.setString("$.ts", "1981-Feb-29");
+    });
+
+    d.setString("$.ts", "");
+    assertEquals("", d.getString("$.ts"));
+  }
+
+  @Test
+  void testEmptyArray() {
+    Document d = getTypedDocument("sample_18_model", "/jdocs/sample_18_1.json");
+    Integer number = d.getInteger("$.addresses[0].number");
+    assertEquals(number, null);
+  }
+
+  @Test
+  void testRootArray() {
+    Document d = getBaseDocument("/jdocs/sample_20.json");
+    int size = d.getArraySize("$.[]");
+    assertEquals(size, 2);
+
+    d = getTypedDocument("sample_20_model", "/jdocs/sample_20.json");
+    size = d.getArraySize("$.[]");
+    assertEquals(size, 2);
+
+    String s = d.getString("$.[0].address.line_1");
+    assertEquals(s, "Happening road");
+
+    s = d.getString("$.[0].cars[0].model");
+    assertEquals(s, "Accord");
+
+    s = d.getString("$.[0].cars[1].model");
+    assertEquals(s, "Camry");
+
+    s = d.getString("$.[1].cars[1].model");
+    assertEquals(s, null);
+  }
+
+  @Test
+  void testRootNativeArray() {
+    Document d = getBaseDocument("/jdocs/sample_21.json");
+    int size = d.getArraySize("$.[]");
+    assertEquals(size, 3);
+
+    d = getTypedDocument("sample_21_model", "/jdocs/sample_21.json");
+    size = d.getArraySize("$.[]");
+    assertEquals(size, 3);
+
+    String s = d.getArrayValueString("$.[0]");
+    assertEquals(s, "code_1");
+
+    s = d.getArrayValueString("$.[1]");
+    assertEquals(s, "code_2");
+
+    UnifyException e = assertThrows(UnifyException.class, () -> {
+      Document td = getTypedDocument("sample_21_model", "/jdocs/sample_21.json");
+      td.getArrayValueString("$.[6]");
+    });
+  }
+
+  @Test
+  void testErrorCollection() {
+    String expected = BaseUtils.getResourceAsString(DocumentTest.class, "/jdocs/sample_19_expected.txt");
+    try {
+      Document d = getTypedDocument("sample_19_model", "/jdocs/sample_19.json");
+    }
+    catch (UnifyException e) {
+      assertEquals(e.getMessage(), expected);
+    }
   }
 
   @Test

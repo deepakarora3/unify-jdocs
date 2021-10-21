@@ -135,6 +135,11 @@ public class ReadOnlyDocument implements Document {
   }
 
   @Override
+  public Object getArrayValue(String path, String... vargs) {
+    return d.getArrayValue(path, vargs);
+  }
+
+  @Override
   public String getString(String path, String... vargs) {
     return d.getString(path, vargs);
   }
@@ -227,6 +232,16 @@ public class ReadOnlyDocument implements Document {
   @Override
   public List<DiffInfo> getDifferences(Document right, boolean onlyDifferences) {
     return d.getDifferences(right, onlyDifferences);
+  }
+
+  @Override
+  public List<DiffInfo> getDifferences(String leftPath, Document right, String rightPath, boolean onlyDifferences) {
+    return d.getDifferences(leftPath, right, rightPath, onlyDifferences);
+  }
+
+  @Override
+  public void validate(String type) {
+    d.validate(type);
   }
 
 }
