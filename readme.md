@@ -6,68 +6,26 @@ It completely eliminates the need to have model / POJO classes and instead works
 on the JSON document. Once you use this library, you may never 
 want to return to using Java model classes or using JSON schema for JSON document validation.
 
+Once you have taken a look, if you like what you see, we would very much appreciate a like for the project - it keeps us motivated knowing that our
+work is getting traction and helping people in the community.
+
+And while you are here, may we mention another of our offerings which could be of interest:
+
+***Unify-flowret - A lightweight Java based orchestration engine***
+
+https://github.com/americanexpress/unify-flowret
+
 ---
 
 #### Getting JDocs package
 
-[ ![Download](https://api.bintray.com/packages/americanexpress/maven/com.americanexpress.unify.jdocs/images/download.svg) ](https://bintray.com/americanexpress/maven/com.americanexpress.unify.jdocs/_latestVersion)
+JDocs is available as a jar file in Maven central with the following latest Maven coordinates.
 
-JDocs is available as a jar file in Bintray JCenter with the following Maven coordinates. The latest
-version is available in the version badge on this page:
-
-````pom
+```pom
 <groupId>com.americanexpress.unify.jdocs</groupId>
 <artifactId>unify-jdocs</artifactId>
-<version>x.y.z</version>
-````
-
-In order to fetch JDocs from JCenter using Maven, include the following in your Maven settings.xml file
-as shown below.
-
-````pom
-<?xml version="1.0" encoding="UTF-8" ?>
-<settings xsi:schemaLocation='http://maven.apache.org/SETTINGS/1.0.0 http://maven.apache.org/xsd/settings-1.0.0.xsd'
-          xmlns='http://maven.apache.org/SETTINGS/1.0.0' xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance'>
-    
-    <profiles>
-        <profile>
-            <repositories>
-                <repository>
-                    <snapshots>
-                        <enabled>false</enabled>
-                    </snapshots>
-                    <id>central</id>
-                    <name>bintray</name>
-                    <url>https://jcenter.bintray.com</url>
-                </repository>
-            </repositories>
-            <pluginRepositories>
-                <pluginRepository>
-                    <snapshots>
-                        <enabled>false</enabled>
-                    </snapshots>
-                    <id>central</id>
-                    <name>bintray-plugins</name>
-                    <url>https://jcenter.bintray.com</url>
-                </pluginRepository>
-            </pluginRepositories>
-            <id>bintray</id>
-        </profile>
-    </profiles>
-    <activeProfiles>
-        <activeProfile>bintray</activeProfile>
-    </activeProfiles>
-</settings>
-````
-
-For Gradle, please use the following:
-````gradle
-repositories {
-    maven {
-        url  "https://jcenter.bintray.com" 
-    }
-}
-````
+<version>1.8.0</version>
+```
 
 ---
 
@@ -169,458 +127,6 @@ code that only deal with traversing model classes and have very little to do wit
 seconds locate all usages of a json path across the code base
 5. By always referring to data as JSON paths, it allows developers to gain a much better understanding of
 the business domain, data and its usage
-
----
-
-#### JDocs - The Core API
-
-```java
-public interface Document {
-
-  /**
-   * Returns a boolean specifying if this document is a typed document
-   */
-  boolean isTyped();
-
-  /**
-   * Returns the type of the document
-   */
-  String getType();
-
-  /**
-   * Returns the date type of the leaf node
-   */
-  DataType getLeafNodeDataType(String path, String... vargs);
-
-  /**
-   * Returns the date type of the leaf node
-   */
-  DataType getArrayValueLeafNodeDataType(String path, String... vargs);
-
-  /**
-   * Sets the type of a document. The model object needs to be already loaded. Validation against the model will
-   * be carried out an an exception thrown if a violation is found
-   */
-  void setType(String type);
-
-  /**
-   * Empty the contents of the document
-   */
-  void empty();
-
-  /**
-   * Delete the specified path from the document. Does nothing if the path is not found. The path specified
-   * can be any path including pointing to a leaf, complex or an array node
-   * <p>
-   * Throws an exception if the path is not found in the associated model document
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   */
-  void deletePath(String path, String... vargs);
-
-  /**
-   * Gets the size of the array at the path specified. The path specified has to be of array type in the json.
-   * <p>
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return the size of the array. If the path is not found in the document, a value of 0 is returned
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the path specified does not contain empty square brackets in the end i.e. []
-   *                                                      If the node in the json document corresponding to the path is not of an array type
-   */
-  int getArraySize(String path, String... vargs);
-
-  /**
-   * Gets the index of an element in the array that contains a field equal to the value as specified in the filter
-   * criteria
-   * <p>
-   * Throws an exception
-   * If the document is a typed document and the path is not found in the associated model document
-   * If the path specified does not end with a filter criteria definition i.e. [field=value]
-   * If the node in the json document corresponding to the path is not of an array type
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return the index of the matched element otherwise -1. The index of the first matched element will be returned
-   */
-  int getArrayIndex(String path, String... vargs);
-
-  /**
-   * Gets the value stored in the given path as a Boolean
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return For a base document, the Boolean value stored at the path else null
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified does not point to a leaf node
-   */
-  Boolean getBoolean(String path, String... vargs);
-
-  /**
-   * Gets the value stored in the given path as an Integer
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return For a base document, the Boolean value stored at the path else null
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified does not point to a leaf node
-   */
-  Integer getInteger(String path, String... vargs);
-
-  /**
-   * Gets the value stored in the given path as a String
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return For a base document, the Boolean value stored at the path else null
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified does not point to a leaf node
-   */
-  String getString(String path, String... vargs);
-
-  /**
-   * Gets the value stored in the given path as a Long
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return For a base document, the Boolean value stored at the path else null
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified does not point to a leaf node
-   */
-  Long getLong(String path, String... vargs);
-
-  /**
-   * Gets the value stored in the given path as a BigDecimal
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return For a base document, the BigDecimal value stored at the path else null
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified does not point to a leaf node
-   */
-  BigDecimal getBigDecimal(String path, String... vargs);
-
-  /**
-   * Gets the value stored in the given path as an Object
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return For a base document, the value stored at the path as an object of the type Integer / Long / BigDecimal / String / Boolean else null
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified does not point to a leaf node
-   */
-  Object getValue(String path, String... vargs);
-
-  /**
-   * Gets the value stored in the given array value path as an Object
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return For a base document, the value stored at the path as an object of the type Integer / Long / BigDecimal / String / Boolean else null
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified does not point to a leaf node
-   */
-  Object getArrayValue(String path, String... vargs);
-
-  /**
-   * Gets the value stored in the array element in the given path as a Boolean
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return For a base document, the Boolean value stored at the path else null
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified does not point to a leaf node
-   */
-  Boolean getArrayValueBoolean(String path, String... vargs);
-
-  /**
-   * Gets the value stored in the array element in the given path as an Integer
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return For a base document, the Boolean value stored at the path else null
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified is not of array element type
-   */
-  Integer getArrayValueInteger(String path, String... vargs);
-
-  /**
-   * Gets the value stored in the array element in the given path as a String
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return For a base document, the Boolean value stored at the path else null
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified is not of array element type
-   */
-  String getArrayValueString(String path, String... vargs);
-
-  /**
-   * Gets the value stored in the array element in the given path as a Long
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return For a base document, the Boolean value stored at the path else null
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified is not of array element type
-   */
-  Long getArrayValueLong(String path, String... vargs);
-
-  /**
-   * Gets the value stored in the array element in the given path as a BigDecimal
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return For a base document, the Boolean value stored at the path else null
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified is not of array element type
-   */
-  BigDecimal getArrayValueBigDecimal(String path, String... vargs);
-
-  /**
-   * Get the JSON string for the document in a compressed format
-   *
-   * @return
-   */
-  String getJson();
-
-  /**
-   * Get the JSON string for the document in a pretty format
-   *
-   * @return
-   */
-  String getPrettyPrintJson();
-
-  /**
-   * Used to determine if the specified path exists in the document
-   *
-   * @param path  the path
-   * @param vargs the values to replace the % characters in path
-   * @return
-   */
-  boolean pathExists(String path, String... vargs);
-
-  /**
-   * Returns the content of the specified path as a new document
-   * The path can only point to a complex object or an array element. It can also point to an array only if
-   * the includeFullkPath variable is true
-   *
-   * @param path                the path in the document from which the contents are to be extracted
-   * @param returnTypedDocument only applicable if this document is a JDocument. If true, an instance of JDocument
-   *                            is returned else an instance of BaseDocument
-   * @param includeFullPath     the returned document is constructed with the full path from root else the path from root is skipped
-   * @param vargs               the values to replace the % characters in path
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the path specified does not point to a complex object
-   *                                                      If the return document is a JDocument but does not conform to the model document
-   *                                                      If path points to an array but the includeFullPath is false
-   */
-  Document getContent(String path, boolean returnTypedDocument, boolean includeFullPath, String... vargs);
-
-  /**
-   * Copies content from document to this document. This functionality will overwrite all content
-   * under the to path with the contents of the object in the from path
-   *
-   * @param fromDoc  the document to copy from
-   * @param fromPath the path in the document to copy from (may contain % placeholders)
-   * @param toPath   the path in this document to copy to (may contain % placeholders)
-   * @param vargs    the values to replace the % characters in from path and to path
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the from document is a typed document and the path is not found in the associated model document
-   *                                                      If the types of the from and to documents do not match
-   *                                                      If either of the paths point to a leaf node
-   *                                                      If the to document is a typed document and if any of the resulting paths is not present in the model document
-   */
-  void setContent(Document fromDoc, String fromPath, String toPath, String... vargs);
-
-  /**
-   * Set the specified value in the specified path
-   *
-   * @param path  the path
-   * @param value the value to set in the path
-   * @param vargs the values to replace the % characters in path
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the path specified does not point to a leaf node
-   */
-  void setBoolean(String path, boolean value, String... vargs);
-
-  /**
-   * Set the specified value in the specified path
-   *
-   * @param path  the path
-   * @param value the value to set in the path
-   * @param vargs the values to replace the % characters in path
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the path specified does not point to a leaf node
-   */
-  void setInteger(String path, int value, String... vargs);
-
-  /**
-   * Set the specified value in the specified path
-   *
-   * @param path  the path
-   * @param value the value to set in the path
-   * @param vargs the values to replace the % characters in path
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the path specified does not point to a leaf node
-   */
-  void setLong(String path, long value, String... vargs);
-
-  /**
-   * Set the specified value in the specified path
-   *
-   * @param path  the path
-   * @param value the value to set in the path
-   * @param vargs the values to replace the % characters in path
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the path specified does not point to a leaf node
-   */
-  void setBigDecimal(String path, BigDecimal value, String... vargs);
-
-  /**
-   * Set the specified value in the specified path
-   *
-   * @param path  the path
-   * @param value the value to set in the path
-   * @param vargs the values to replace the % characters in path
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the path specified does not point to a leaf node
-   */
-  void setString(String path, String value, String... vargs);
-
-  /**
-   * Sets the specified value in the specified array element in the given path
-   *
-   * @param path  the path
-   * @param value the value to set
-   * @param vargs the values to replace the % characters in path
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified is not of array element type
-   */
-  void setArrayValueBoolean(String path, boolean value, String... vargs);
-
-  /**
-   * Sets the specified value in the specified array element in the given path
-   *
-   * @param path  the path
-   * @param value the value to set
-   * @param vargs the values to replace the % characters in path
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified is not of array element type
-   */
-  void setArrayValueInteger(String path, int value, String... vargs);
-
-  /**
-   * Sets the specified value in the specified array element in the given path
-   *
-   * @param path  the path
-   * @param value the value to set
-   * @param vargs the values to replace the % characters in path
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified is not of array element type
-   */
-  void setArrayValueLong(String path, long value, String... vargs);
-
-  /**
-   * Sets the specified value in the specified array element in the given path
-   *
-   * @param path  the path
-   * @param value the value to set
-   * @param vargs the values to replace the % characters in path
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified is not of array element type
-   */
-  void setArrayValueBigDecimal(String path, BigDecimal value, String... vargs);
-
-  /**
-   * Sets the specified value in the specified array element in the given path
-   *
-   * @param path  the path
-   * @param value the value to set
-   * @param vargs the values to replace the % characters in path
-   * @throws com.americanexpress.unify.jdocs.UnifyException If the document is a typed document and the path is not found in the associated model document
-   *                                                      If the document is a typed document and the type of the path in the model document does not match
-   *                                                      If the type of the value specified in the path in the document does not match
-   *                                                      If the path specified is not of array element type
-   */
-  void setArrayValueString(String path, String value, String... vargs);
-
-  /**
-   * Create a copy of this document
-   *
-   * @return the new document
-   */
-  Document deepCopy();
-
-  /**
-   * Merge the contents of one document into another. Both the documents need to be typed documents and of the same type.
-   * The key field of each array element in the document to be merged must be specified. The deletion of specified paths
-   * is carried out prior to the merge of the document fragment
-   *
-   * @param d             the document fragment that needs to be merged into this document
-   * @param pathsToDelete the list of paths to delete from this document before merge
-   */
-  void merge(Document d, List<String> pathsToDelete);
-
-  /**
-   * Get the list of paths existing in the document
-   */
-  List<String> flatten();
-
-  /**
-   * Get the list of paths existing in the document along with the value in each path as a string
-   */
-  List<PathValue> flattenWithValues();
-
-  /**
-   * Compares two documents and return the results in a list. The document on which the method is
-   * invoked is assumed to be the left document
-   *
-   * @param right           the right document to compare
-   * @param onlyDifferences specifies if only difference results are to be returned or all
-   */
-  List<DiffInfo> getDifferences(Document right, boolean onlyDifferences);
-
-}
-
-```
 
 ---
 
@@ -1220,17 +726,82 @@ d.setString("$.start_date", "15-Apr-2019") // incorrect date format
 d.setString("$.phones[0].number", "111111") // incorrect data type
 ```
 
-As regards constraints, the validation is done against the specified regular expression. If a match
-returns true, the validation is assumed to succeed else an exception is thrown. 
+As regards constraints, the validation is done against the specified regular expression. If a match returns true, the
+validation is assumed to succeed else an exception is thrown.
 
 The following attributes are implemented as part of specifying a constraint on a path:
 
 S. No. | Field Name | Description | Type | Mandatory?
 ------ | --------------- | ------------| ---- | ----------
 1 | type | Defines the type of the field. Possible values are string, integer, long, decimal, boolean, date | String | Yes
-2 | null_allowed | Specifies if null is a valid value for the field. If not specified, default is no null allowed | boolean | No
-3 | regex | The pattern against which the value will be validated | string | No
-4 | format | Only applicable for date type. Specification is as per DateTimeFormatter | string | Yes only for date type
+2 | regex | The pattern against which the value will be validated | string | No
+3 | null_allowed | Specifies if null is a valid value for the field. If not specified, default is null not allowed. If value is null and allowed, regex will be ignored | boolean | No
+4 | ignore_regex_if_empty_string | If not specified, default is false. If specified to true, regex will be ignored if value is empty. Applicable only for string type fields | boolean | No
+5 | format | Only applicable for date type. Specification is as per DateTimeFormatter | string | Yes
+6 | empty_date_allowed | Only applicable for date type fields. If not specified, default is true. If allowed format check is ignored  | boolean | No
+
+**Validating typed documents**
+
+Typed documents may be validated when:
+
+1. They are constructed
+2. At the time of specifying the type of a base document (`setType` method)
+3. When calling the `validateAllPaths` or `validateModelPaths` methods
+4. When calling the `getXXX` or `setXXX` methods on the document e.g. `getString` / `setString`
+
+There are three types of validations mechanism that can be specified:
+
+`CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS`
+
+All paths found in the document will be validated against the model document.
+
+`CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS`
+
+Only those data paths for which model paths exists will be validated against the model document.
+
+`CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE`
+
+Validations will be performed only when a data path is read or written by the use of
+`getXXX` and `setXXX` methods.
+
+The validation types `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS`
+and `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE`
+are used in scenarios where we may be getting extra fields / paths from an external entity (think an API response) and
+these paths are not part of our model document. In such cases, we can look to validate the paths which are found in the
+model document or validate them only at read and write of paths.
+
+This is a typical scenario in the use of APIs which can return extra blocks and paths which may not be present in the
+model document and which we may not be interested in. If we were to validate at the time of creating the document, the
+model validations would fail unless we kept the model document in sync with all the changes happening on the API side.
+Most of the times, this is not possible as the teams are separate and there is no reason that adding fields to the
+response which we are not interested in should cause a failure.
+
+The validation mechanism can be set at the whole of JDocs level or at a per document level. To set the validation
+mechanism at a JDocs level, initialize JDocs by specifying the validation type in the `init` method as below. This
+validation type will come into effect for all typed documents unless a validation type has been specified explicitly for
+a document:
+
+`public static void init(CONSTS_JDOCS.VALIDATION_TYPE validationType)`
+
+If the `init` method is called without any parameters, then `CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS` is assumed
+default.
+
+We can also specify the validation type independently at the document level. Assuming that we have called the default
+`init` method (with no parameters), lets say that for only one document in a particular instance, we wanted to use
+`CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS` validation mechanism. We could override JDocs default validation
+mechanism by specifying the validation while constructing the document as below:
+
+`Document d = new JDocument(type, json, CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS);`
+
+or while setting the type of a base document as below:
+
+`d.setType(type, CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS);`
+
+There are also a couple of utility methods to validate a document against a model as below:
+
+`public void validateAllPaths(String type);`
+
+`public void validateModelPaths(String type);`
 
 ---
 
@@ -1240,7 +811,7 @@ Given a document, it is possible to extract content from it as a new document. C
 
 ```json
 {
-  "id": "id",
+   "id": "id",
   "family" : {
     "number_of_members": 2,
     "members": [
@@ -1482,18 +1053,16 @@ or the path types may not match i.e. one path may be an array while the other ma
 object or a leaf node. In case any such case is encountered, an exception is thrown and
 the operation aborted.
 
-**CAUTION** -> In case of an exception encountered, whatever merges have been carried out into the 
-from document will remain so and the document will not be reverted back. Ideally if both
-are typed documents, this should not occur. Even then if the application wants
-the document to be reverted, it should first create a copy of the to document, try the merge
-into that first and then if it succeeds, carry it out in the first document.
+**CAUTION** -> In case of an exception encountered, whatever merges have been carried out into the from document will
+remain so and the document will not be reverted back. Ideally if both are typed documents, this should not occur. Even
+then if the application wants the document to be reverted, it should first create a copy of the to document, try the
+merge into that first and then if it succeeds, carry it out in the first document.
 
-This feature of merge is used extensively in scenarios where the master document is given to clients
-as a read only document and along with it, an empty document (called a fragment) is provided.
-Whatever the client has to update into the master, it writes into the fragement and returns
-the fragment to the caller. The caller then merges the fragment into the main master document.
-This gives programs the ability to record incremental updates to a document and later build
-mechanism to play them back to see how the updates occurred.
+This feature of merge is used extensively in scenarios where the main document is given to clients as a read only
+document and along with it, an empty document (called a fragment) is provided. Whatever the client has to update into
+the main, it writes into the fragement and returns the fragment to the caller. The caller then merges the fragment into
+the main document. This gives programs the ability to record incremental updates to a document and later build mechanism
+to play them back to see how the updates occurred.
 
 ---
 
@@ -1774,20 +1343,23 @@ from the model document
 
 1. Ability to write data to JSON documents using JSON paths for fields AND complex objects AND arrays
 2. A very simple and easy to use feature of binding the structure of a JSON document to a model
-which can then be used to enforce the integrity of the structure during read and writes
-3. Ability to define regex constraints on fields in the model which are used to
-validate the field values at the time of writing
-4. Ability to merge documents into one another including merging complex objects and arrays
-nested any levels deep
+   which can then be used to enforce the integrity of the structure during read and writes
+3. Ability to define regex constraints on fields in the model which are used to validate the field values at the time of
+   writing
+4. Ability to merge documents into one another including merging complex objects and arrays nested any levels deep
 5. Ability to reuse and embed models
 6. Ability to copy content from one document to another using JSON paths
 7. And most of all freedom from model classes and code bloat
 
 ---
 
-##### What next?
+#### JDocs - The Core API
 
-Read the API documentation of Document class to get into API levels details.
+The core API can be referred to in the file `Document.java`.
+
+---
+
+##### What next?
 
 Go through the unit test cases in the source code. Unit test cases are available in the location `src/test`
 

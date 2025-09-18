@@ -14,13 +14,17 @@
 
 package com.americanexpress.unify.jdocs;
 
+import com.americanexpress.unify.base.BaseUtils;
+import com.americanexpress.unify.base.UnifyException;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
 
+import static com.americanexpress.unify.jdocs.CONSTS_JDOCS.VALIDATION_TYPE.*;
 import static org.junit.jupiter.api.Assertions.*;
 
 /*
@@ -30,7 +34,7 @@ public class DocumentTest {
 
   @BeforeAll
   private static void setup() {
-    ERRORS_JDOCS.load();
+    JDocument.init();
   }
 
   private String getCompressedJson(String filePath) {
@@ -50,6 +54,14 @@ public class DocumentTest {
   }
 
   private Document getTypedDocument(String type, String filePath) {
+    return getTypedDocumentHelper(type, filePath, ALL_DATA_PATHS);
+  }
+
+  private Document getTypedDocument(String type, String filePath, CONSTS_JDOCS.VALIDATION_TYPE validationType) {
+    return getTypedDocumentHelper(type, filePath, validationType);
+  }
+
+  private Document getTypedDocumentHelper(String type, String filePath, CONSTS_JDOCS.VALIDATION_TYPE validationType) {
     setDocModel(type);
 
     String json = null;
@@ -60,7 +72,7 @@ public class DocumentTest {
       json = BaseUtils.getResourceAsString(DocumentTest.class, filePath);
     }
 
-    return new JDocument(type, json);
+    return new JDocument(type, json, validationType);
   }
 
   private void setDocModel(String type) {
@@ -81,6 +93,40 @@ public class DocumentTest {
 
     d = new JDocument("sample_1_model", null);
     assertEquals(d.getPrettyPrintJson(), "{ }");
+
+    d = new JDocument();
+    d.setString("$.house.family.father_name", "Deepak");
+    boolean b = d.pathExists("$.house");
+    assertEquals(b, true);
+
+    d = new JDocument();
+    d.setString("$.house[0].family.father_name", "Deepak");
+    b = d.pathExists("$.house");
+    assertEquals(b, true);
+
+    b = d.isArray("$.house");
+    assertEquals(b, true);
+
+    b = d.isArray("$.house[]");
+    assertEquals(b, true);
+
+    b = d.isArray("$.house[0].family");
+    assertEquals(b, false);
+
+    d = new JDocument("[]");
+    d.setString("$.[0].name", "Deepak");
+    d.setString("$.[1].name", "Nitika");
+    Document d1 = new JDocument();
+    d1.setContent(d, "$.[]", "$.application[]");
+
+    {
+      // this will run ok
+      d = new JDocument();
+      d.setString("$.pod_info.fname", "Deepak");
+      d.setString("$.pod_info.lname", "Arora");
+      Document rd = new JDocument("[]");
+      rd.setContent(d, "$.pod_info", "$.[0]");
+    }
   }
 
   @Test
@@ -96,12 +142,12 @@ public class DocumentTest {
     assertEquals("9999999999", d.getString("$.members[sex=male].phones[type=mobile].number"));
 
     // check int and long reads
-    assertEquals(new Integer(0), d.getInteger("$.members[0].index"));
-    assertEquals(new Long(0), d.getLong("$.members[0].index"));
+    assertEquals(Integer.valueOf(0), d.getInteger("$.members[0].index"));
+    assertEquals(Long.valueOf(0), d.getLong("$.members[0].index"));
 
     // check boolean reads
-    assertEquals(new Boolean(true), d.getBoolean("$.members[0].is_married"));
-    assertEquals(new Boolean(false), d.getBoolean("$.members[1].is_married"));
+    assertEquals(Boolean.valueOf(true), d.getBoolean("$.members[0].is_married"));
+    assertEquals(Boolean.valueOf(false), d.getBoolean("$.members[1].is_married"));
 
     // check null read
     assertEquals(null, d.getString("$.info.iid"));
@@ -233,8 +279,6 @@ public class DocumentTest {
   void testDelete() {
     Document d = getBaseDocument("/jdocs/sample_1.json");
 
-    UnifyException e = null;
-
     // nothing should happen
     d.deletePath("$.laksdlkj");
 
@@ -313,6 +357,16 @@ public class DocumentTest {
   @Test
   void testNativeArray() {
     Document d = getBaseDocument("/jdocs/native_array.json");
+
+    int size = d.getArraySize("$.valid_states[0].states[]");
+    assertEquals(size, 5);
+
+    boolean pathExists = d.pathExists("$.valid_states[0].states[0]");
+    assertEquals(pathExists, true);
+
+    pathExists = d.pathExists("$.valid_states[0].states[5]");
+    assertEquals(pathExists, false);
+
     String s = d.getArrayValueString("$.valid_states[0].states[0]");
     assertEquals(s, "AZ");
 
@@ -349,7 +403,7 @@ public class DocumentTest {
     assertEquals(s, "AZ");
 
     Integer code = (Integer)d.getArrayValue("$.valid_states[0].codes[0]");
-    assertEquals(code, new Integer(1));
+    assertEquals(code, Integer.valueOf(1));
   }
 
   @Test
@@ -414,7 +468,7 @@ public class DocumentTest {
     actual = toDoc.getJson();
     assertEquals(expected, actual);
 
-    // test case 6
+    // test case 7
     fromDoc = getTypedDocument("sample_6_model", null);
     fromDoc.setInteger("$.application.members[0].phones[0].docs[0].index", 0);
     fromDoc.setString("$.application.members[0].phones[0].docs[0].name", "Deepak");
@@ -423,6 +477,28 @@ public class DocumentTest {
     expected = getCompressedJson("/jdocs/sample_6_5_expected.json");
     actual = toDoc.getJson();
     assertEquals(expected, actual);
+
+    // test case 8 - we just check that it does not throw an exception
+    fromDoc = getBaseDocument("/jdocs/sample_25.json");
+    toDoc = new JDocument("[]");
+    toDoc.setContent(fromDoc, "$.addresses[]", "$.[]");
+    assertTrue(true);
+
+    toDoc = new JDocument("[]");
+    toDoc.setContent(fromDoc, "$.addresses", "$.[]");
+    assertTrue(true);
+
+    toDoc = new JDocument();
+    toDoc.setContent(fromDoc, "$.addresses", "$.addresses[]");
+    assertTrue(true);
+
+    try {
+      toDoc = new JDocument();
+      toDoc.setContent(fromDoc, "$.addresses", "$.addresses");
+    }
+    catch (UnifyException e) {
+      assertEquals(UnifyException.class, e.getClass());
+    }
   }
 
   @Test
@@ -508,12 +584,12 @@ public class DocumentTest {
   @Test
   void testSetArray() throws IOException {
     Document d = getBaseDocument("/jdocs/sample_11.json");
-    Document master = new JDocument();
-    master.setContent(d, "$.members[0]", "$.members[0]");
-    master.setContent(d, "$.members[0]", "$.members[1]");
-    master.setContent(d, "$.members[0]", "$.members[2]");
+    Document primary = new JDocument();
+    primary.setContent(d, "$.members[0]", "$.members[0]");
+    primary.setContent(d, "$.members[0]", "$.members[1]");
+    primary.setContent(d, "$.members[0]", "$.members[2]");
     String expected = getCompressedJson("/jdocs/sample_11_expected.json");
-    String actual = master.getJson();
+    String actual = primary.getJson();
     assertEquals(expected, actual);
   }
 
@@ -727,6 +803,95 @@ public class DocumentTest {
   }
 
   @Test
+  void testValidateAtReadWriteOnly() {
+    Document d = null;
+
+    try {
+      d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_AT_READ_WRITE);
+
+    try {
+      d.getString("$.phone_cell");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    try {
+      d.getString("$.giberish");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    String s = d.getString("$.first_name");
+    assertEquals(s, "Deepak");
+
+    d = getBaseDocument("/jdocs/sample_23.json");
+
+    s = d.getString("$.giberish");
+    assertEquals(s, null);
+
+    s = d.getString("$.last_name");
+    assertEquals(s, "Arora");
+
+    s = d.getString("$.phone_home");
+    assertEquals(s, "1234");
+
+    try {
+      d.validateAllPaths("sample_23_model");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    try {
+      d.setType("sample_23_model");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    d.setType("sample_23_model", CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE);
+
+    try {
+      d.validateAllPaths("sample_23_model");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    // we now set the default to be true
+    JDocument.init(CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE);
+
+    d = getBaseDocument("/jdocs/sample_23.json");
+    d.setType("sample_23_model"); // will not validate and hence no exception thrown
+    try {
+      d.validateAllPaths("sample_23_model"); // will fail validation here
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    try {
+      d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json"); // will fail validation here
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_AT_READ_WRITE); // this should pass
+
+    // restore it back
+    JDocument.init(CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS);
+  }
+
+  @Test
   void testRootArray() {
     Document d = getBaseDocument("/jdocs/sample_20.json");
     int size = d.getArraySize("$.[]");
@@ -747,6 +912,13 @@ public class DocumentTest {
 
     s = d.getString("$.[1].cars[1].model");
     assertEquals(s, null);
+
+    d = new JDocument("{\n" +
+            "  \"response\": \"\",\n" +
+            "  \"status\": 500\n" +
+            "}");
+    boolean b = d.pathExists("$.[0].raw_response");
+    assertEquals(b, false);
   }
 
   @Test
@@ -774,11 +946,13 @@ public class DocumentTest {
   @Test
   void testErrorCollection() {
     String expected = BaseUtils.getResourceAsString(DocumentTest.class, "/jdocs/sample_19_expected.txt");
+    expected = BaseUtils.getWithoutCarriageReturn(expected);
     try {
       Document d = getTypedDocument("sample_19_model", "/jdocs/sample_19.json");
     }
     catch (UnifyException e) {
-      assertEquals(e.getMessage(), expected);
+      String actual = BaseUtils.getWithoutCarriageReturn(e.getMessage());
+      assertEquals(actual, expected);
     }
   }
 
@@ -792,7 +966,9 @@ public class DocumentTest {
       s = s + printDiffInfo(di);
     }
 
+    s = BaseUtils.getWithoutCarriageReturn(s);
     String expected = BaseUtils.getResourceAsString(DocumentTest.class, "/jdocs/sample_16_expected.txt");
+    expected = BaseUtils.getWithoutCarriageReturn(expected);
     assertEquals(s, expected);
   }
 
@@ -865,7 +1041,6 @@ public class DocumentTest {
             "ONLY_IN_LEFT, $.cars[0].make, null\n" +
             "DIFFERENT, $.vendors[1], $.vendors[1]\n" +
             "ONLY_IN_RIGHT, null, $.family.members[1].first_name\n";
-    System.out.println(expected);
     assertEquals(s, expected);
   }
 
@@ -905,6 +1080,383 @@ public class DocumentTest {
     }
 
     assertEquals(s, expected);
+  }
+
+  @Test
+  void testMergeKeyBeingObject() {
+    Document d = getTypedDocument("sample_22_model", "/jdocs/sample_22.json");
+    Document frag = getTypedDocument("sample_22_model", "/jdocs/sample_22_frag.json");
+
+    UnifyException e = assertThrows(UnifyException.class, () -> {
+      d.merge(frag, null);
+    });
+  }
+
+  @Test
+  void testIsLeafNode() {
+    Document d = getTypedDocument("sample_22_model", "/jdocs/sample_22.json");
+
+    boolean b = d.isLeafNode("$.addresses[0].block.field1");
+    assertEquals(b, true);
+
+    b = d.isLeafNode("$.addresses[0].block");
+    assertEquals(b, false);
+
+    b = d.isLeafNode("$.addresses[0]");
+    assertEquals(b, false);
+
+    b = d.isLeafNode("$.addresses");
+    assertEquals(b, false);
+
+    b = d.isLeafNode("$.addresses[0].block");
+    assertEquals(b, false);
+
+    UnifyException e = assertThrows(UnifyException.class, () -> {
+      d.isLeafNode("$.addresses12345[0].block");
+    });
+
+  }
+
+  @Test
+  void testMergeDelete() {
+    Document d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+    Document appFrag = new JDocument("sample_24_model", null);
+    List<String> list = new ArrayList<>();
+    boolean b;
+
+    // check path not in model
+    list.add("$.members[2].salkdf[5].phones");
+    try {
+      b = true;
+      d.merge(appFrag, list);
+    }
+    catch (UnifyException e) {
+      b = false;
+    }
+    assertEquals(false, b);
+
+    // index out of bound
+    list.clear();
+    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+    list.add("$.members[2]");
+    d.merge(appFrag, list);
+    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+    list.clear();
+    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+
+    // name value mismatch
+    list.add("$.members[index=deepak].index");
+    try {
+      b = true;
+      d.merge(appFrag, list);
+    }
+    catch (UnifyException e) {
+      b = false;
+    }
+    assertEquals(false, b);
+
+    list.clear();
+    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+    list.add("$.members[type=basic].phones[type=home].number");
+    d.merge(appFrag, list);
+    assertEquals(false, d.pathExists("$.members[type=basic].phones[type=home].number"));
+
+    list.clear();
+    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+    list.add("$.members[0].phones[type=mobile].number");
+    d.merge(appFrag, list);
+    assertEquals(false, d.pathExists("$.members[0].phones[type=mobile].number"));
+
+    list.clear();
+    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+    list.add("$.members[0].phones[type=mobile]");
+    d.merge(appFrag, list);
+    assertEquals(false, d.pathExists("$.members[0].phones[type=mobile]"));
+    assertEquals(false, d.pathExists("$.members[0].phones[1]"));
+
+    list.clear();
+    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+    list.add("$.members[type=supp].phones[type=mobile]");
+    d.merge(appFrag, list);
+    assertEquals(false, d.pathExists("$.members[1].phones[type=mobile]"));
+    assertEquals(false, d.pathExists("$.members[1].phones[1]"));
+
+    list.clear();
+    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+    list.add("$.members[first_name=Chintu]");
+    list.add("$.members[0]");
+    list.add("$.members[0]");
+    list.add("$.members[3]");
+    list.add("$.members[first_name=Chini].phones[type=home].number");
+    list.add("$.members[2].phones[type=mobile].number");
+    d.merge(appFrag, list);
+    assertEquals(false, d.pathExists("$.members[first_name=Chintu].phones[type=mobile]"));
+    assertEquals(false, d.pathExists("$.members[first_name=jenny].phones[1]"));
+    assertEquals(false, d.pathExists("$.members[2].phones[1]"));
+    list.add("$.members[first_name=Jenny].phones[type=mobile].number");
+    list.add("$.members[first_name=Chini].phones[type=home].number");
+
+    list.clear();
+    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+    list.add("$.members[first_name=ufiedoep].phones[1]");
+    list.add("$.members[3].phones[0]");
+    d.merge(appFrag, list);
+    assertEquals(false, d.pathExists("$.members[3].phones[1]"));
+
+    list.clear();
+    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+    list.add("$.members[0].phones[]");
+    d.merge(appFrag, list);
+
+    list.clear();
+    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+    list.add("$.members[0].last_name");
+    d.merge(appFrag, list);
+    assertEquals(false, d.pathExists("$.members[0].last_name"));
+    list.clear();
+    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+  }
+
+  @Test
+  void testIgnoreRegexIfEmpty() {
+    setDocModel("sample_26_model");
+    Document d = new JDocument("sample_26_model", null);
+
+    d.setString("$.id1", "GO2");
+    assertEquals(true, true);
+
+    UnifyException e = assertThrows(UnifyException.class, () -> {
+      d.setString("$.id1", "");
+    });
+
+    d.setString("$.id2", "");
+    assertEquals(true, true);
+
+    d.setString("$.id2", "GNA");
+    assertEquals(true, true);
+
+    e = assertThrows(UnifyException.class, () -> {
+      d.setString("$.id2", "hhh");
+    });
+
+    d.setString("$.id3", "2023-Jan-26");
+    assertEquals(true, true);
+
+    d.setString("$.id3", "");
+    assertEquals(true, true);
+
+    e = assertThrows(UnifyException.class, () -> {
+      d.setString("$.id4", "");
+    });
+  }
+
+  @Test
+  void testFieldValidationInGetMethods() {
+    setDocModel("sample_26_model");
+
+    Document d = new JDocument();
+    d.setString("$.id1", "GO2");
+    d.setType("sample_26_model", CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE);
+    d.getString("$.id1");
+
+    d = new JDocument();
+    d.setString("$.id1", "giberish");
+    d.setType("sample_26_model", CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE);
+    try {
+      d.getString("$.id1");
+    }
+    catch (Exception e) {
+      assertEquals(true, true);
+    }
+
+    d = new JDocument();
+    d.setString("$.id1", "giberish");
+
+    try {
+      d.setType("sample_26_model", CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS);
+    }
+    catch (Exception e) {
+      assertEquals(true, true);
+    }
+  }
+
+  @Test
+  void testValidation() {
+    Document d = null;
+
+    // test - will fail
+    try {
+      d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ALL_DATA_PATHS);
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    // test - doc construction will succeed but read of field will fail
+    d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_MODEL_PATHS);
+    try {
+      d.getString("$.phone_cell");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    // test - doc construction will succeed but read of field will fail
+    d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_AT_READ_WRITE);
+    try {
+      d.getString("$.phone_cell");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    // valid test
+    String s = d.getString("$.first_name");
+    assertEquals(s, "Deepak");
+
+    // above tests but this time using set type / validate methods
+    d = getBaseDocument("/jdocs/sample_23.json");
+
+    s = d.getString("$.giberish");
+    assertEquals(s, null);
+
+    s = d.getString("$.last_name");
+    assertEquals(s, "Arora");
+
+    s = d.getString("$.phone_home");
+    assertEquals(s, "1234");
+
+    // try to validate a base document against a model - will succeed
+    d.validateModelPaths("sample_23_model");
+
+    // set type by default - will throw exception
+    try {
+      d.setType("sample_23_model");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    // test only model paths -  will succeed
+    d.setType("sample_23_model", ONLY_MODEL_PATHS);
+
+    // now validate all paths - will fail
+    try {
+      d.validateAllPaths("sample_23_model");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    // we now set the default to only at read write
+    JDocument.init(ONLY_AT_READ_WRITE);
+
+    d = getBaseDocument("/jdocs/sample_23.json");
+    d.setType("sample_23_model"); // will not validate and hence no exception thrown
+    try {
+      d.validateAllPaths("sample_23_model"); // will fail validation here
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+    d.validateModelPaths("sample_23_model"); // will succeed
+
+    try {
+      d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json"); // will fail validation here
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_MODEL_PATHS); // this should pass
+    d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_AT_READ_WRITE); // this should pass
+
+    // restore it back
+    JDocument.init(ALL_DATA_PATHS);
+
+    // we now set the default to model validation
+    JDocument.init(ONLY_MODEL_PATHS);
+
+    d = getBaseDocument("/jdocs/sample_23.json");
+    d.setType("sample_23_model"); // will validate and hence no exception thrown
+    try {
+      d.validateAllPaths("sample_23_model"); // will fail validation here
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+    d.validateModelPaths("sample_23_model"); // will succeed
+
+    try {
+      d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json"); // will fail validation here
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_MODEL_PATHS); // this should pass
+    d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_AT_READ_WRITE); // this should pass
+
+    // restore it back
+    JDocument.init(ALL_DATA_PATHS);
+  }
+
+  @Test
+  void testMissingParams() {
+    Document d = new JDocument();
+
+    try {
+      String s = d.getString("$.names[name=%].first_name");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    try {
+      String s = d.getString("$.names[name=%].other[number=%].first_name");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    try {
+      String s = d.getString("$.names[name=%].other[number=%].first_name", "Deepak");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+    try {
+      String s = d.getString("$.names[%].first_name");
+      assert (false);
+    }
+    catch (Exception e) {
+    }
+
+  }
+
+  @Test
+  void testNumber() {
+    try {
+      // all primitive types at root are valid JSONs
+      Document d = new JDocument("14");
+      // use below to read the value of such a JSON document
+      // String s = d.getJson();
+      // long value = Long.valueOf(s);
+      d = new JDocument("14.1");
+      d = new JDocument("true");
+      d = new JDocument("\"hello\"");
+    }
+    catch (Exception e) {
+      assert(false);
+    }
+  }
+
+  @Test
+  void testTemp() {
+    JDocument d = (JDocument)getBaseDocument("/jdocs/temp.json");
+    String s = d.getString("$.id");
+    System.out.println(s);
   }
 
 }

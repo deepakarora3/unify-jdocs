@@ -14,6 +14,8 @@
 
 package com.americanexpress.unify.jdocs;
 
+import com.americanexpress.unify.base.ErrorMap;
+
 import java.util.Map;
 
 /*
@@ -35,7 +37,7 @@ public class ERRORS_JDOCS extends ErrorMap {
     map.put("jdoc_err_10", "Invalid path expression. Non definite array node not allowed in path. Node -> {0}");
     map.put("jdoc_err_11", "Invalid path expression. Non leaf array node cannot be indefinite. Node -> {0}");
     map.put("jdoc_err_12", "Internal error. Non existent path access type. Type -> {0}");
-    map.put("jdoc_err_13", "Mismatch in field type between calling function and data in doucment at path -> {0}");
+    map.put("jdoc_err_13", "Mismatch in field type between calling function and data in document at path -> {0}");
     map.put("jdoc_err_14", "Invalid path expression. Leaf of path is not a value node. Path -> {0}");
     map.put("jdoc_err_15", "Invalid class specification. Clazz -> {0}");
     map.put("jdoc_err_16", "Array index out of bounds for leaf node");
@@ -83,6 +85,15 @@ public class ERRORS_JDOCS extends ErrorMap {
     map.put("jdoc_err_61", "Type value not found for model path {0}");
     map.put("jdoc_err_62", "Invalid value encountered in path -> {0}");
     map.put("jdoc_err_63", "Error encountered while loading format string. Type -> {0}, path -> {1}, format string -> {2}");
+    map.put("jdoc_err_64", "Key field node is not a value node in the array -> {0}");
+    map.put("jdoc_err_65", "Path not found in document -> {0}");
+    map.put("jdoc_err_67", "Name value pair not allowed in this method. Path is -> {0}");
+    map.put("jdoc_err_68", "Path does not exist in document. Path -> {0}");
+    map.put("jdoc_err_69", "Path specified cannot be a leaf node. Path -> {0}");
+    map.put("jdoc_err_70", "Empty value not allowed for a date at path -> {0}");
+    map.put("jdoc_err_71", "Date format missing for path -> {0}");
+    map.put("jdoc_err_73", "Type cannot be null or empty");
+    map.put("jdoc_err_74", "The type of a document cannot be changed");
   }
 
 }

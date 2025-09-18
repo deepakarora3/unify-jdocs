@@ -32,6 +32,8 @@ public class CONSTS_JDOCS {
     public static final String REGEX = "regex";
     public static final String FORMAT = "format"; // used only for date
     public static final String NULL_ALLOWED = "null_allowed";
+    public static final String IGNORE_REGEX_IF_EMPTY_STRING = "ignore_regex_if_empty_string";
+    public static final String EMPTY_DATE_ALLOWED = "empty_date_allowed";
 
   }
 
@@ -45,6 +47,12 @@ public class CONSTS_JDOCS {
     SET_ARRAY_VALUE,
     PATH_EXISTS,
     CONTENT
+  }
+
+  public enum VALIDATION_TYPE {
+    ALL_DATA_PATHS,
+    ONLY_MODEL_PATHS,
+    ONLY_AT_READ_WRITE
   }
 
 }

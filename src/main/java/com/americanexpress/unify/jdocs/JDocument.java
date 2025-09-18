@@ -14,6 +14,10 @@
 
 package com.americanexpress.unify.jdocs;
 
+import com.americanexpress.unify.base.BaseUtils;
+import com.americanexpress.unify.base.CONSTS_BASE;
+import com.americanexpress.unify.base.ERRORS_BASE;
+import com.americanexpress.unify.base.UnifyException;
 import com.fasterxml.jackson.core.JsonParser;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.util.DefaultIndenter;
@@ -21,7 +25,9 @@ import com.fasterxml.jackson.core.util.DefaultPrettyPrinter;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.ObjectWriter;
+import com.fasterxml.jackson.databind.cfg.JsonNodeFeature;
 import com.fasterxml.jackson.databind.node.*;
+import io.vavr.Tuple2;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -36,12 +42,15 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
+import static com.americanexpress.unify.jdocs.DataType.DATE;
+import static com.americanexpress.unify.jdocs.DataType.STRING;
+
 /*
  * @author Deepak Arora
  */
 public class JDocument implements Document {
 
-  // a map to store the doc models in use. In future we could use an ExpiryMap
+  // a map to store the doc models in use. In the future, we could use an ExpiryMap
   private static Map<String, Document> docModels = new ConcurrentHashMap<>();
 
   // for each model document, store a map of the constraint string and the corresponding JsonNode
@@ -50,18 +59,77 @@ public class JDocument implements Document {
   // for each regular expression pattern, store the compiled pattern
   private static Map<String, Pattern> compiledPatterns = new ConcurrentHashMap<>();
 
+  private static CONSTS_JDOCS.VALIDATION_TYPE defaultValidationType = CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS;
+
   // type of the document
   private String type = "";
 
+  private CONSTS_JDOCS.VALIDATION_TYPE validationType = CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS;
+
+  // variable that tells us if the document has been validated against its type. Only applicable for typed documents
+  private boolean isValidated = false;
+
   // logger
   private static final Logger logger = LoggerFactory.getLogger(JDocument.class);
+
   // root json node of the document
   protected JsonNode rootNode = null;
 
   // one and only one object mapper -> object mappers are thread safe!!!
-  protected static final ObjectMapper objectMapper = new ObjectMapper().configure(JsonParser.Feature.ALLOW_COMMENTS, true);
+  protected static final ObjectMapper objectMapper = new ObjectMapper().configure(JsonParser.Feature.ALLOW_COMMENTS, true).configure(JsonNodeFeature.STRIP_TRAILING_BIGDECIMAL_ZEROES, false);
 
   private static final ObjectWriter objectWriter = objectMapper.writer(new DefaultPrettyPrinter().withObjectIndenter(new DefaultIndenter().withLinefeed("\n")));
+
+  public static void init() {
+    init(CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS);
+  }
+
+  /**
+   * inits JDocs
+   * <p>
+   * This method is deprecated - use the new method init(CONSTS_JDOCS.VALIDATION_TYPE validationType)
+   */
+  @Deprecated
+  public static void init(boolean defaultValidateAtReadWriteOnly) {
+    // should be done once at the start
+    ERRORS_BASE.load();
+    ERRORS_JDOCS.load();
+    if (defaultValidateAtReadWriteOnly == true) {
+      JDocument.defaultValidationType = CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE;
+    }
+    else {
+      JDocument.defaultValidationType = CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS;
+    }
+  }
+
+  public static void init(CONSTS_JDOCS.VALIDATION_TYPE validationType) {
+    // should be done once at the start
+    ERRORS_BASE.load();
+    ERRORS_JDOCS.load();
+    JDocument.defaultValidationType = validationType;
+  }
+
+  public static CONSTS_JDOCS.VALIDATION_TYPE getDefaultValidationType() {
+    return defaultValidationType;
+  }
+
+  /**
+   * This method is deprecated - use the new method getDefaultValidationType()
+   */
+  @Deprecated
+  public boolean getDefaultValidateAtReadWriteOnly() {
+    if (defaultValidationType == CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE) {
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+  @Override
+  public CONSTS_JDOCS.VALIDATION_TYPE getValidationType() {
+    return validationType;
+  }
 
   public JDocument() {
     try {
@@ -82,9 +150,32 @@ public class JDocument implements Document {
   }
 
   public JDocument(String type, String json) {
+    init(type, json, defaultValidationType);
+  }
+
+  /**
+   * This method is deprecated - use the new constructor JDocument(String type, String json, CONSTS_JDOCS.VALIDATION_TYPE validationType)
+   */
+  @Deprecated
+  public JDocument(String type, String json, boolean validateAtReadWriteOnly) {
+    if (validateAtReadWriteOnly == true) {
+      init(type, json, CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE);
+    }
+    else {
+      init(type, json, CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS);
+    }
+  }
+
+  public JDocument(String type, String json, CONSTS_JDOCS.VALIDATION_TYPE validationType) {
+    init(type, json, validationType);
+  }
+
+  private void init(String type, String json, CONSTS_JDOCS.VALIDATION_TYPE validationType) {
     if ((type == null) || (type.isEmpty())) {
       throw new UnifyException("jdoc_err_56");
     }
+
+    this.validationType = validationType;
 
     try {
       this.type = type;
@@ -94,14 +185,14 @@ public class JDocument implements Document {
       else {
         rootNode = objectMapper.readTree(json);
       }
-      validate(type);
+
+      if (validationType != CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE) {
+        validate(type, validationType);
+      }
     }
     catch (IOException ex) {
       throw new UnifyException("jdoc_err_1", ex);
     }
-  }
-
-  public static void initDocumentTypes(String doc_models, String s) {
   }
 
   @Override
@@ -157,14 +248,50 @@ public class JDocument implements Document {
 
   @Override
   public void setType(String type) {
-    if ((type == null) || (type.isEmpty())) {
-      type = "";
+    setType(type, defaultValidationType);
+  }
+
+  /**
+   * This method is deprecated - use the new method setType(String type, CONSTS_JDOCS.VALIDATION_TYPE validationType)
+   */
+  @Override
+  @Deprecated
+  public void setType(String type, boolean validateAtReadWriteOnly) {
+    if (BaseUtils.isNullOrEmptyAfterTrim(type) == true) {
+      throw new UnifyException("jdoc_err_73");
+    }
+
+    // if this is already a typed document and we are trying to set it to a different type throw an exception
+    if ((this.type.isEmpty() == false) && (type.equals(this.type) == false)) {
+      throw new UnifyException("jdoc_err_74");
+    }
+
+    if (validateAtReadWriteOnly == true) {
+      this.validationType = CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE;
     }
     else {
-      // validate the contents here
-      validate(type);
-      this.type = type;
+      this.validationType = CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS;
+      validate(type, this.validationType);
     }
+    this.type = type;
+  }
+
+  @Override
+  public void setType(String type, CONSTS_JDOCS.VALIDATION_TYPE validationType) {
+    if (BaseUtils.isNullOrEmptyAfterTrim(type) == true) {
+      throw new UnifyException("jdoc_err_73");
+    }
+
+    // if this is already a typed document and we are trying to set it to a different type throw an exception
+    if ((this.type.isEmpty() == false) && (type.equals(this.type) == false)) {
+      throw new UnifyException("jdoc_err_74");
+    }
+
+    this.validationType = validationType;
+    if (validationType != CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE) {
+      validate(type, validationType);
+    }
+    this.type = type;
   }
 
   // Base document methods
@@ -182,15 +309,30 @@ public class JDocument implements Document {
     }
   }
 
+  /**
+   * This method is deprecated - use the new methods validateModelPaths / validateAllPaths
+   */
   @Override
+  @Deprecated
   public final void validate(String type) {
-    // function to validate the contents of the whole document
-    Document md = docModels.get(type);
-    List<String> errorList = validate(((JDocument)md).rootNode, rootNode, "$.", type);
-    processErrors(errorList);
+    // function to validate the contents of the document. All data paths are validated as we do not want to disrupt
+    // existing behavior
+    validate(type, CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS);
   }
 
-  private static JsonNode getMatchingArrayElementByField(ArrayNode node, String field, String value) {
+  private final void validate(String type, CONSTS_JDOCS.VALIDATION_TYPE validationType) {
+    Document md = docModels.get(type);
+    if (md == null) {
+      throw new UnifyException("jdoc_err_29", type);
+    }
+    List<String> errorList = validate(((JDocument)md).rootNode, rootNode, "$.", type, validationType);
+    processErrors(errorList);
+    if (isTyped() == true) {
+      isValidated = true;
+    }
+  }
+
+  private JsonNode getMatchingArrayElementByField(ArrayNode node, String field, String value) {
     JsonNode matchedNode = null;
 
     int size = node.size();
@@ -209,7 +351,7 @@ public class JDocument implements Document {
     return matchedNode;
   }
 
-  private static int getMatchingArrayElementIndex(ArrayNode node, String field, String value) {
+  private int getMatchingArrayElementIndex(ArrayNode node, String field, String value) {
     JsonNode matchedNode = null;
 
     int size = node.size();
@@ -229,8 +371,90 @@ public class JDocument implements Document {
     return index;
   }
 
+  private String replaceNameValuePairsWithIndexes(List<Token> tokens) {
+    // now we construct the new path names while removing the name value pairs
+    // if we do not find an index for a name value pair we do not add it to the new list
+    String s = "$";
+    boolean pathExists = true;
+    for (Token t : tokens) {
+      if (t.isArray()) {
+        ArrayToken at = (ArrayToken)t;
+        s = s + "." + at.getField() + "[";
+
+        ArrayToken.FilterType ft = at.getFilter().getType();
+        if (ft == ArrayToken.FilterType.EMPTY) {
+          s = s + "]";
+        }
+        else if (ft == ArrayToken.FilterType.INDEX) {
+          s = s + at.getFilter().getIndex() + "]";
+        }
+        else if (ft == ArrayToken.FilterType.NAME_VALUE) {
+          String evalPath = s;
+          evalPath = evalPath + at.getFilter().getField() + "=" + at.getFilter().getValue() + "]";
+          int index = getArrayIndex(evalPath);
+          if (index == -1) {
+            pathExists = false;
+            break;
+          }
+          else {
+            s = s + index + "]";
+          }
+        }
+      }
+      else {
+        s = s + "." + t.getField();
+      }
+    }
+
+    if (pathExists == false) {
+      s = "";
+    }
+    return s;
+  }
+
+  @Override
+  public void deletePaths(List<String> pathsToDelete) {
+    if ((pathsToDelete == null) || (pathsToDelete.size() == 0)) {
+      return;
+    }
+
+    List<String> newPathsToDelete = new ArrayList<>();
+
+    for (String path : pathsToDelete) {
+      List<Token> tokens = validatePath(path, CONSTS_JDOCS.API.DELETE_PATH, PathAccessType.OBJECT);
+
+      if (isTyped() == true) {
+        validateFilterNames(path, tokens);
+        checkPathExistsInModel(getModelPath(path));
+      }
+
+      String s = replaceNameValuePairsWithIndexes(tokens);
+      if (s.isEmpty() == false) {
+        newPathsToDelete.add(s);
+      }
+    }
+
+    // remove duplicates
+    Set<String> set = new HashSet<>(newPathsToDelete);
+    newPathsToDelete.clear();
+    newPathsToDelete.addAll(set);
+
+    // pad the indexes as this is required for proper sorting
+    newPathsToDelete = JsonPathUtils.getZeroPaddedIndexes(newPathsToDelete);
+
+    // sort in the reverse order
+    newPathsToDelete.sort(Comparator.comparing(String::toString).reversed());
+
+    // delete the paths one by one
+    newPathsToDelete.stream().forEach(s -> deletePath(s));
+  }
+
   @Override
   public void merge(Document d, List<String> pathsToDelete) {
+    if (d == null) {
+      d = new JDocument(type, null);
+    }
+
     if (isTyped()) {
       JDocument td = (JDocument)d;
       if (type.equals(td.type) == false) {
@@ -238,9 +462,7 @@ public class JDocument implements Document {
       }
 
       // first delete the paths
-      if (pathsToDelete != null) {
-        pathsToDelete.stream().forEach(s -> deletePath(s));
-      }
+      deletePaths(pathsToDelete);
 
       // now merge
       JsonNode modelNode = null;
@@ -253,24 +475,24 @@ public class JDocument implements Document {
     }
   }
 
-  protected boolean pathExists(String path, List<Token> tokenList) {
-    boolean exists = false;
+  private JsonNode getJsonNode(List<Token> tokenList) {
+    JsonNode node = null;
+
     while (true) {
       if (tokenList.isEmpty()) {
         break;
       }
 
-      JsonNode node = traverse(rootNode, tokenList, false, false);
+      node = traverse(rootNode, tokenList, false, false);
 
       if (node == null) {
         break;
       }
 
-      exists = true;
       break;
     }
 
-    return exists;
+    return node;
   }
 
   /**
@@ -286,7 +508,72 @@ public class JDocument implements Document {
       validateFilterNames(path, tokenList);
       checkPathExistsInModel(getModelPath(path));
     }
-    return pathExists(path, tokenList);
+
+    JsonNode node = getJsonNode(tokenList);
+    if (node == null) {
+      return false;
+    }
+    else {
+      return true;
+    }
+  }
+
+  /**
+   * @param path
+   * @return
+   * @throws UnifyException
+   */
+  @Override
+  public boolean isArray(String path, String... vargs) {
+    path = getStaticPath(path, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.PATH_EXISTS, PathAccessType.OBJECT);
+    if (isTyped()) {
+      validateFilterNames(path, tokenList);
+      checkPathExistsInModel(getModelPath(path));
+    }
+
+    JsonNode node = getJsonNode(tokenList);
+
+    if (node == null) {
+      throw new UnifyException("jdoc_err_68", path);
+    }
+
+    if (node.getNodeType() == JsonNodeType.ARRAY) {
+      return true;
+    }
+    else {
+      return false;
+    }
+  }
+
+  /**
+   * @param path
+   * @return
+   * @throws UnifyException
+   */
+  @Override
+  public Document getDocument(String path, String... vargs) {
+    path = getStaticPath(path, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.PATH_EXISTS, PathAccessType.OBJECT);
+    if (isTyped()) {
+      validateFilterNames(path, tokenList);
+      checkPathExistsInModel(getModelPath(path));
+    }
+
+    JsonNode node = getJsonNode(tokenList);
+
+    if (node == null) {
+      throw new UnifyException("jdoc_err_68", path);
+    }
+
+    if (isLeafNode(path)) {
+      throw new UnifyException("jdoc_err_69", path);
+    }
+
+    node = node.deepCopy();
+    JDocument d = new JDocument();
+    d.rootNode = node;
+    return d;
   }
 
   /**
@@ -434,7 +721,7 @@ public class JDocument implements Document {
     return s;
   }
 
-  private static JsonNode traverseObject(JsonNode node, Token token, boolean createNode) {
+  private JsonNode traverseObject(JsonNode node, Token token, boolean createNode) {
     JsonNode retNode = null;
     JsonNode objectNode = node.get(token.getField());
 
@@ -456,19 +743,23 @@ public class JDocument implements Document {
     return retNode;
   }
 
-  private static JsonNode traverseArrayEmpty(JsonNode node, ArrayToken token, boolean createNode) {
+  private JsonNode traverseArrayEmpty(JsonNode node, ArrayToken token, boolean createNode) {
     JsonNode retNode = null;
     JsonNode arrayNode = null;
 
     // special handling for document that starts with an array
     String fieldName = token.getField();
     if (fieldName.isEmpty() == true) {
-      arrayNode = node;
+      if (node.getNodeType() == JsonNodeType.ARRAY) {
+        arrayNode = node;
+      }
+      else {
+        arrayNode = null;
+      }
     }
     else {
       arrayNode = node.get(fieldName);
     }
-
 
     while (true) {
       if (arrayNode == null) {
@@ -483,7 +774,7 @@ public class JDocument implements Document {
 
       // check that it is indeed an array
       if (arrayNode.isArray() == false) {
-        throw new UnifyException("jdoc_err_7" + token.getField());
+        throw new UnifyException("jdoc_err_7", token.getField());
       }
 
       retNode = arrayNode;
@@ -493,11 +784,11 @@ public class JDocument implements Document {
     return retNode;
   }
 
-  private static JsonNode traverseArrayIndex(JsonNode node, ArrayToken token, boolean createNode) {
+  private JsonNode traverseArrayIndex(JsonNode node, ArrayToken token, boolean createNode) {
     return traverseArrayIndex(node, token, createNode, true);
   }
 
-  private static JsonNode traverseArrayIndex(JsonNode node, ArrayToken token, boolean createNode, boolean throwException) {
+  private JsonNode traverseArrayIndex(JsonNode node, ArrayToken token, boolean createNode, boolean throwException) {
     JsonNode retNode = null;
     int index = token.getFilter().getIndex();
 
@@ -550,7 +841,7 @@ public class JDocument implements Document {
     return retNode;
   }
 
-  private static JsonNode traverseArrayNameValue(JsonNode node, ArrayToken token, boolean createNode) {
+  private JsonNode traverseArrayNameValue(JsonNode node, ArrayToken token, boolean createNode) {
     JsonNode retNode = null;
     JsonNode arrayNode = traverseArrayEmpty(node, token, createNode);
 
@@ -581,7 +872,7 @@ public class JDocument implements Document {
     return retNode;
   }
 
-  private static JsonNode traverse(JsonNode rootNode, List<Token> tokenList, boolean createNode, boolean throwException) {
+  private JsonNode traverse(JsonNode rootNode, List<Token> tokenList, boolean createNode, boolean throwException) {
     JsonNode node = rootNode;
 
     for (Token token : tokenList) {
@@ -622,11 +913,11 @@ public class JDocument implements Document {
     return node;
   }
 
-  private static JsonNode traverse(JsonNode rootNode, List<Token> tokenList, boolean createNode) {
+  private JsonNode traverse(JsonNode rootNode, List<Token> tokenList, boolean createNode) {
     return traverse(rootNode, tokenList, createNode, true);
   }
 
-  private static boolean isArrayTokenDefinite(ArrayToken arrayToken) {
+  private boolean isArrayTokenDefinite(ArrayToken arrayToken) {
     boolean isDefinite = false;
 
     while (true) {
@@ -731,15 +1022,17 @@ public class JDocument implements Document {
     }
   }
 
-  protected Object getValue(String path, Class clazz, List<Token> tokenList) {
+  protected Tuple2<Object, Boolean> getValue(String path, Class clazz, List<Token> tokenList) {
     JsonNode node = null;
     Object value = null;
+    Boolean isPathPresent = true;
 
     while (true) {
       node = traverse(rootNode, tokenList, false);
 
       if (node == null) {
         value = null;
+        isPathPresent = false;
         break;
       }
 
@@ -823,7 +1116,7 @@ public class JDocument implements Document {
       break;
     }
 
-    return value;
+    return new Tuple2<>(value, isPathPresent);
   }
 
   private void setLeafNode(ObjectNode node, String field, Object value) {
@@ -851,9 +1144,6 @@ public class JDocument implements Document {
       else {
         throw new UnifyException("jdoc_err_15", value.getClass().getCanonicalName());
       }
-
-      // at present just throw an exception
-      // throw new UnifyException("jdoc_err_15", value.getClass().getCanonicalName());
     }
 
   }
@@ -1067,10 +1357,6 @@ public class JDocument implements Document {
     JsonNode node = rootNode;
     String tokenPath = "$";
 
-    if (value == null) {
-      // throw new UnifyException("jdoc_err_20", path);
-    }
-
     // traverse the document. If we find a node corresponding to the path token and it matches the type
     // i.e. array or object or value node we go inside
     // if we do not find the token in the document, we create it and move inside
@@ -1086,7 +1372,9 @@ public class JDocument implements Document {
           tokenPath = tokenPath + "[0]";
 
           // first get / set the array node under which we need to search for the filter field
-          node = setArrayNode((ObjectNode)node, field);
+          if (node.getNodeType() != JsonNodeType.ARRAY) {
+            node = setArrayNode((ObjectNode)node, field);
+          }
 
           // get / set the node at which we need to make the change
           node = setArrayIndexNode((ArrayNode)node, (ArrayToken)token, path, tokenPath);
@@ -1118,11 +1406,7 @@ public class JDocument implements Document {
 
   }
 
-  protected String getStaticPath(String path, String... vargs) {
-    if (vargs.length == 0) {
-      return path;
-    }
-
+  public static String getStaticPath(String path, String... vargs) {
     int size = path.length();
     StringBuffer sb = new StringBuffer();
     int counter = 0;
@@ -1161,120 +1445,185 @@ public class JDocument implements Document {
   public Object getValue(String path, String... vargs) {
     path = getStaticPath(path, vargs);
     List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
-    if (isTyped()) {
-      checkPathExistsInModel(getModelPath(path));
+    String modelPath = checkPathInModel(path, tokenList);
+    Tuple2<Object, Boolean> tuple2 = getValue(path, null, tokenList);
+    Object value = tuple2._1;
+    boolean isPathPresent = tuple2._2;
+    if (isPathPresent == true) {
+      checkFieldValue(path, modelPath, value, false);
     }
-    return getValue(path, null, tokenList);
+    return value;
   }
 
   @Override
   public String getString(String path, String... vargs) {
     path = getStaticPath(path, vargs);
     List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
-    if (isTyped()) {
-      checkPathExistsInModel(getModelPath(path));
+    String modelPath = checkPathInModel(path, tokenList);
+    Tuple2<Object, Boolean> tuple2 = getValue(path, String.class, tokenList);
+    String value = (String)tuple2._1;
+    boolean isPathPresent = tuple2._2;
+    if (isPathPresent == true) {
+      checkFieldValue(path, modelPath, value, false);
     }
-    return (String)getValue(path, String.class, tokenList);
+    return value;
+  }
+
+  private void checkFieldValue(String path, String modelPath, Object value, boolean isValueArray) {
+    if ((isTyped() == true) && (isValidated == false) && (validationType == CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE)) {
+      String format = getFieldFormat(path, modelPath, isValueArray);
+      validateField(format, value, modelPath, null, type);
+    }
+  }
+
+  private String checkPathInModel(String path, List<Token> tokenList) {
+    String modelPath = null;
+    if (isTyped()) {
+      validateFilterNames(path, tokenList);
+      modelPath = getModelPath(path);
+      checkPathExistsInModel(modelPath);
+    }
+    return modelPath;
   }
 
   @Override
   public Integer getInteger(String path, String... vargs) {
     path = getStaticPath(path, vargs);
     List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
-    if (isTyped()) {
-      checkPathExistsInModel(getModelPath(path));
+    String modelPath = checkPathInModel(path, tokenList);
+    Tuple2<Object, Boolean> tuple2 = getValue(path, Integer.class, tokenList);
+    Integer value = (Integer)tuple2._1;
+    boolean isPathPresent = tuple2._2;
+    if (isPathPresent == true) {
+      checkFieldValue(path, modelPath, value, false);
     }
-    return (Integer)getValue(path, Integer.class, tokenList);
+    return value;
   }
 
   @Override
   public Boolean getBoolean(String path, String... vargs) {
     path = getStaticPath(path, vargs);
     List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
-    if (isTyped()) {
-      checkPathExistsInModel(getModelPath(path));
+    String modelPath = checkPathInModel(path, tokenList);
+    Tuple2<Object, Boolean> tuple2 = getValue(path, Boolean.class, tokenList);
+    Boolean value = (Boolean)tuple2._1;
+    boolean isPathPresent = tuple2._2;
+    if (isPathPresent == true) {
+      checkFieldValue(path, modelPath, value, false);
     }
-    return (Boolean)getValue(path, Boolean.class, tokenList);
+    return value;
   }
 
   @Override
   public Long getLong(String path, String... vargs) {
     path = getStaticPath(path, vargs);
     List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
-    if (isTyped()) {
-      checkPathExistsInModel(getModelPath(path));
+    String modelPath = checkPathInModel(path, tokenList);
+    Tuple2<Object, Boolean> tuple2 = getValue(path, Long.class, tokenList);
+    Long value = (Long)tuple2._1;
+    boolean isPathPresent = tuple2._2;
+    if (isPathPresent == true) {
+      checkFieldValue(path, modelPath, value, false);
     }
-    return (Long)getValue(path, Long.class, tokenList);
+    return value;
   }
 
   @Override
   public BigDecimal getBigDecimal(String path, String... vargs) {
     path = getStaticPath(path, vargs);
     List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET, PathAccessType.VALUE);
-    if (isTyped()) {
-      checkPathExistsInModel(getModelPath(path));
+    String modelPath = checkPathInModel(path, tokenList);
+    Tuple2<Object, Boolean> tuple2 = getValue(path, BigDecimal.class, tokenList);
+    BigDecimal value = (BigDecimal)tuple2._1;
+    boolean isPathPresent = tuple2._2;
+    if (isPathPresent == true) {
+      checkFieldValue(path, modelPath, value, false);
     }
-    return (BigDecimal)getValue(path, BigDecimal.class, tokenList);
+    return value;
   }
 
   @Override
   public Object getArrayValue(String path, String... vargs) {
     path = getStaticPath(path, vargs);
     List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE);
-    if (isTyped()) {
-      checkPathExistsInModel(getModelPath(path));
+    String modelPath = checkPathInModel(path, tokenList);
+    Tuple2<Object, Boolean> tuple2 = getValue(path, null, tokenList);
+    Object value = tuple2._1;
+    boolean isPathPresent = tuple2._2;
+    if (isPathPresent == true) {
+      checkFieldValue(path, modelPath, value, true);
     }
-    return getValue(path, null, tokenList);
+    return value;
   }
 
   @Override
   public String getArrayValueString(String path, String... vargs) {
     path = getStaticPath(path, vargs);
     List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE);
-    if (isTyped()) {
-      checkPathExistsInModel(getModelPath(path));
+    String modelPath = checkPathInModel(path, tokenList);
+    Tuple2<Object, Boolean> tuple2 = getValue(path, String.class, tokenList);
+    String value = (String)tuple2._1;
+    boolean isPathPresent = tuple2._2;
+    if (isPathPresent == true) {
+      checkFieldValue(path, modelPath, value, true);
     }
-    return (String)getValue(path, String.class, tokenList);
+    return value;
   }
 
   @Override
   public Integer getArrayValueInteger(String path, String... vargs) {
     path = getStaticPath(path, vargs);
     List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE);
-    if (isTyped()) {
-      checkPathExistsInModel(getModelPath(path));
+    String modelPath = checkPathInModel(path, tokenList);
+    Tuple2<Object, Boolean> tuple2 = getValue(path, Integer.class, tokenList);
+    Integer value = (Integer)tuple2._1;
+    boolean isPathPresent = tuple2._2;
+    if (isPathPresent == true) {
+      checkFieldValue(path, modelPath, value, true);
     }
-    return (Integer)getValue(path, Integer.class, tokenList);
+    return value;
   }
 
   @Override
   public Boolean getArrayValueBoolean(String path, String... vargs) {
     path = getStaticPath(path, vargs);
     List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE);
-    if (isTyped()) {
-      checkPathExistsInModel(getModelPath(path));
+    String modelPath = checkPathInModel(path, tokenList);
+    Tuple2<Object, Boolean> tuple2 = getValue(path, Boolean.class, tokenList);
+    Boolean value = (Boolean)tuple2._1;
+    boolean isPathPresent = tuple2._2;
+    if (isPathPresent == true) {
+      checkFieldValue(path, modelPath, value, true);
     }
-    return (Boolean)getValue(path, Boolean.class, tokenList);
+    return value;
   }
 
   @Override
   public Long getArrayValueLong(String path, String... vargs) {
     path = getStaticPath(path, vargs);
     List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE);
-    if (isTyped()) {
-      checkPathExistsInModel(getModelPath(path));
+    String modelPath = checkPathInModel(path, tokenList);
+    Tuple2<Object, Boolean> tuple2 = getValue(path, Long.class, tokenList);
+    Long value = (Long)tuple2._1;
+    boolean isPathPresent = tuple2._2;
+    if (isPathPresent == true) {
+      checkFieldValue(path, modelPath, value, true);
     }
-    return (Long)getValue(path, Long.class, tokenList);
+    return value;
   }
 
   @Override
   public BigDecimal getArrayValueBigDecimal(String path, String... vargs) {
     path = getStaticPath(path, vargs);
     List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.GET_ARRAY_VALUE, PathAccessType.VALUE);
-    if (isTyped()) {
-      checkPathExistsInModel(getModelPath(path));
+    String modelPath = checkPathInModel(path, tokenList);
+    Tuple2<Object, Boolean> tuple2 = getValue(path, BigDecimal.class, tokenList);
+    BigDecimal value = (BigDecimal)tuple2._1;
+    boolean isPathPresent = tuple2._2;
+    if (isPathPresent == true) {
+      checkFieldValue(path, modelPath, value, true);
     }
-    return (BigDecimal)getValue(path, BigDecimal.class, tokenList);
+    return value;
   }
 
   @Override
@@ -1450,11 +1799,17 @@ public class JDocument implements Document {
     }
   }
 
+  private void copyInstanceFields(JDocument d, String type, CONSTS_JDOCS.VALIDATION_TYPE validationType, boolean isValidated) {
+    d.type = type;
+    d.validationType = validationType;
+    d.isValidated = isValidated;
+  }
+
   @Override
   public synchronized Document deepCopy() {
     JDocument d = new JDocument();
     d.rootNode = rootNode.deepCopy();
-    d.type = type;
+    copyInstanceFields(d, type, validationType, isValidated);
     return d;
   }
 
@@ -1528,7 +1883,7 @@ public class JDocument implements Document {
       }
 
       if (token.isArray() == false) {
-        // do field handling handling
+        // do field handling
         JsonNode leafNode = node.get(token.getField());
         if (leafNode != null) {
           ((ObjectNode)node).remove(token.getField());
@@ -1541,7 +1896,6 @@ public class JDocument implements Document {
     }
   }
 
-
   @Override
   public void deletePath(String path, String... vargs) {
     path = getStaticPath(path, vargs);
@@ -1552,12 +1906,33 @@ public class JDocument implements Document {
     }
 
     // we first check if the path exists in the document only then do we go ahead to delete it
+    // we do this because pathExists handles out of bound indexes but deletePath does not
     if (pathExists(path) == true) {
       deletePath(path, tokenList);
     }
-    else {
-      // nothing to do
+  }
+
+  @Override
+  public boolean isLeafNode(String path, String... vargs) {
+    path = getStaticPath(path, vargs);
+    List<Token> tokenList = validatePath(path, CONSTS_JDOCS.API.PATH_EXISTS, PathAccessType.OBJECT);
+    if (isTyped()) {
+      validateFilterNames(path, tokenList);
+      checkPathExistsInModel(getModelPath(path));
     }
+
+    JsonNode node = getJsonNode(tokenList);
+    if (node == null) {
+      throw new UnifyException("jdoc_err_65", path);
+    }
+    boolean b = false;
+    switch (node.getNodeType()) {
+      case BOOLEAN:
+      case NUMBER:
+      case STRING:
+        b = true;
+    }
+    return b;
   }
 
   protected List<Token> parse(String path) {
@@ -1566,7 +1941,7 @@ public class JDocument implements Document {
 
   @Override
   public Document getContent(String path, boolean returnTypedDocument, boolean includeFullPath, String... vargs) {
-    Document d = null;
+    JDocument d = null;
 
     if (vargs.length > 0) {
       path = getStaticPath(path, vargs);
@@ -1587,7 +1962,8 @@ public class JDocument implements Document {
       }
 
       if (isTyped() && (returnTypedDocument == true)) {
-        d = new JDocument(type, null);
+        d = new JDocument(type, null, validationType);
+        d.isValidated = isValidated;
       }
       else {
         d = new JDocument();
@@ -1630,7 +2006,6 @@ public class JDocument implements Document {
   }
 
   // typed document methods
-
   public static void loadDocumentModel(String type, String json) {
     logger.info("Loading document model -> " + type);
     try {
@@ -1663,7 +2038,7 @@ public class JDocument implements Document {
     }
   }
 
-  private static Document getDocumentModel(String type) {
+  public static Document getDocumentModel(String type) {
     return docModels.get(type);
   }
 
@@ -1690,12 +2065,12 @@ public class JDocument implements Document {
 
             if (line.charAt(line.length() - 1) == ',') {
               sb.append(',');
-              sb.append(CONSTS_JDOCS.NEW_LINE);
+              sb.append(CONSTS_BASE.NEW_LINE);
             }
           }
           else {
             sb.append(line);
-            sb.append(CONSTS_JDOCS.NEW_LINE);
+            sb.append(CONSTS_BASE.NEW_LINE);
           }
         }
 
@@ -1782,7 +2157,7 @@ public class JDocument implements Document {
     return s;
   }
 
-  private static void mergeArray(ArrayNode toNode, ArrayNode fromNode, ArrayNode modelNode, String field) {
+  private void mergeArray(ArrayNode toNode, ArrayNode fromNode, ArrayNode modelNode, String field) {
     // check if it is a array value
     JsonNode node = modelNode.get(0);
     if (node instanceof ValueNode) {
@@ -1809,6 +2184,11 @@ public class JDocument implements Document {
         if (keyNode == null) {
           throw new UnifyException("jdoc_err_33", field);
         }
+
+        if (keyNode.isValueNode() == false) {
+          throw new UnifyException("jdoc_err_64", field);
+        }
+
         String keyValue = keyNode.asText();
         JsonNode toMatchedNode = getMatchingArrayElementByKey(toNode, keyField, keyValue, field);
         if (toMatchedNode == null) {
@@ -1823,7 +2203,7 @@ public class JDocument implements Document {
     }
   }
 
-  private static JsonNode getMatchingArrayElementByKey(ArrayNode node, String keyField, String fromKeyValue, String field) {
+  private JsonNode getMatchingArrayElementByKey(ArrayNode node, String keyField, String fromKeyValue, String field) {
     JsonNode matchedNode = null;
 
     int size = node.size();
@@ -1843,7 +2223,7 @@ public class JDocument implements Document {
     return matchedNode;
   }
 
-  private static String getKeyField(ArrayNode modelNode) {
+  private String getKeyField(ArrayNode modelNode) {
     String keyField = null;
 
     JsonNode node = modelNode.get(0).get(CONSTS_JDOCS.FORMAT_FIELDS.KEY);
@@ -1860,7 +2240,7 @@ public class JDocument implements Document {
     return keyField;
   }
 
-  private static void merge(JsonNode toNode, JsonNode fromNode, JsonNode modelNode) {
+  private void merge(JsonNode toNode, JsonNode fromNode, JsonNode modelNode) {
     Iterator<Map.Entry<String, JsonNode>> mergeFromFieldIter = fromNode.fields();
 
     while (mergeFromFieldIter.hasNext()) {
@@ -1940,7 +2320,7 @@ public class JDocument implements Document {
     }
   }
 
-  private static void updateObject(JsonNode mergeInTo, ValueNode valueToBePlaced, Map.Entry<String, JsonNode> toBeMerged) {
+  private void updateObject(JsonNode mergeInTo, ValueNode valueToBePlaced, Map.Entry<String, JsonNode> toBeMerged) {
     boolean newEntry = true;
     Iterator<Map.Entry<String, JsonNode>> mergeIntoIter = mergeInTo.fields();
     while (mergeIntoIter.hasNext()) {
@@ -1955,7 +2335,7 @@ public class JDocument implements Document {
     }
   }
 
-  private static JsonNode getFormatNode(String type, String path, String format) {
+  private JsonNode getFormatNode(String type, String path, String format) {
     JsonNode node = docModelPaths.get(format);
     if (node == null) {
       try {
@@ -1969,14 +2349,14 @@ public class JDocument implements Document {
     return node;
   }
 
-  private static void throwExceptionOrSetErrorList(String errorCode, String path, List<String> errorList) {
+  private void throwExceptionOrSetErrorList(String errorCode, String path, List<String> errorList) {
     if (errorList == null) {
       throw new UnifyException(errorCode, path);
     }
     else {
       String msg = ERRORS_JDOCS.getErrorMessage(errorCode);
       if (msg == null) {
-        logger.error("Error code {} not found in ErrorMap", errorCode);
+        logger.warn("Error code {} not found in ErrorMap", errorCode);
         msg = "";
       }
       else {
@@ -1986,7 +2366,7 @@ public class JDocument implements Document {
     }
   }
 
-  private static void validateField(String format, Object value, String path, List<String> errorList, String type) {
+  private void validateField(String format, Object value, String path, List<String> errorList, String type) {
     // "{\"field\":\"field_name\"}"
     // "{\"type\":\"string\", \"regex\":\"\\\\w{17,17}\"}"
     // "{\"type\":\"date\", \"format\":\"uuuu-MM-dd HH:mm:ss.SSS GMT\"}"
@@ -2004,6 +2384,18 @@ public class JDocument implements Document {
     JsonNode node = getFormatNode(type, path, format);
 
     while (true) {
+      // check that the format field is specified if we are dealing with a date
+      DataType dataType = DataType.valueOf(node.get(CONSTS_JDOCS.FORMAT_FIELDS.TYPE).asText().toUpperCase());
+
+      // check that a date field has to have a format. Whether the format is correct or not will be validated later
+      if (dataType == DATE) {
+        String formatValue = node.get(CONSTS_JDOCS.FORMAT_FIELDS.FORMAT).asText();
+        if (formatValue.isEmpty() == true) {
+          throwExceptionOrSetErrorList("jdoc_err_71", path, errorList);
+          break;
+        }
+      }
+
       // if the value is null, check if nulls are allowed
       if (value == null) {
         JsonNode node1 = node.get(CONSTS_JDOCS.FORMAT_FIELDS.NULL_ALLOWED);
@@ -2014,12 +2406,10 @@ public class JDocument implements Document {
         if (isNullAllowed == false) {
           throwExceptionOrSetErrorList("jdoc_err_36", path, errorList);
         }
-
         break;
       }
 
       // check data types
-      DataType dataType = DataType.valueOf(node.get(CONSTS_JDOCS.FORMAT_FIELDS.TYPE).asText().toUpperCase());
       switch (dataType) {
         case STRING:
           if ((value instanceof String) == false) {
@@ -2064,6 +2454,45 @@ public class JDocument implements Document {
           break;
       }
 
+      // check if value is empty and if so do we need to ignore regex
+      if (dataType == STRING) {
+        String s = value.toString();
+        if (s.isEmpty()) {
+          JsonNode node1 = node.get(CONSTS_JDOCS.FORMAT_FIELDS.IGNORE_REGEX_IF_EMPTY_STRING);
+
+          // by default do not ignore. Historically we have been disallowing an empty string if it does not match
+          // regex pattern. The new requirement is to be able to ignore regex if the value is empty
+          boolean ignoreRegex = false;
+          if (node1 != null) {
+            ignoreRegex = node.get(CONSTS_JDOCS.FORMAT_FIELDS.IGNORE_REGEX_IF_EMPTY_STRING).booleanValue();
+          }
+          if (ignoreRegex == true) {
+            break;
+          }
+        }
+      }
+
+      // check if value is empty and if it is allowed
+      if (dataType == DATE) {
+        String s = value.toString();
+        if (s.isEmpty()) {
+          JsonNode node1 = node.get(CONSTS_JDOCS.FORMAT_FIELDS.EMPTY_DATE_ALLOWED);
+
+          // by default we ignore. Historically we have been ignoring the format if an empty date value
+          // is provided. The new requirement is to not allow an empty date value
+          boolean emptyDateAllowed = true;
+          if (node1 != null) {
+            emptyDateAllowed = node.get(CONSTS_JDOCS.FORMAT_FIELDS.EMPTY_DATE_ALLOWED).booleanValue();
+          }
+          if (emptyDateAllowed == true) {
+            break;
+          }
+          else {
+            throwExceptionOrSetErrorList("jdoc_err_70", path, errorList);
+          }
+        }
+      }
+
       // check against regex pattern and format
       switch (dataType) {
         case STRING:
@@ -2091,17 +2520,13 @@ public class JDocument implements Document {
 
         case DATE:
           // Match input date with the format provided
-          String fieldValue = node.get(CONSTS_JDOCS.FORMAT_FIELDS.FORMAT).asText();
-          if (fieldValue.isEmpty() == false) {
-            try {
-              DateTimeFormatter dfs = DateTimeFormatter.ofPattern(fieldValue).withResolverStyle(ResolverStyle.STRICT);
-              if (value.toString().isEmpty() == false) {
-                dfs.parse(value.toString());
-              }
-            }
-            catch (Exception e) {
-              throwExceptionOrSetErrorList("jdoc_err_51", path, errorList);
-            }
+          String formatValue = node.get(CONSTS_JDOCS.FORMAT_FIELDS.FORMAT).asText();
+          try {
+            DateTimeFormatter dfs = DateTimeFormatter.ofPattern(formatValue).withResolverStyle(ResolverStyle.STRICT);
+            dfs.parse(value.toString());
+          }
+          catch (Exception e) {
+            throwExceptionOrSetErrorList("jdoc_err_51", path, errorList);
           }
           break;
 
@@ -2143,7 +2568,7 @@ public class JDocument implements Document {
 
               case BOOLEAN:
                 if (BaseUtils.compareWithMany(fieldValue, "true", "false") == true) {
-                  value = new Boolean(fieldValue);
+                  value = Boolean.valueOf(fieldValue);
                 }
                 else {
                   throw new UnifyException("jdoc_err_53", fieldName, path);
@@ -2155,11 +2580,11 @@ public class JDocument implements Document {
                 break;
 
               case INTEGER:
-                value = new Integer(fieldValue);
+                value = Integer.valueOf(fieldValue);
                 break;
 
               case LONG:
-                value = new Long(fieldValue);
+                value = Long.valueOf(fieldValue);
                 break;
 
               case DECIMAL:
@@ -2225,19 +2650,19 @@ public class JDocument implements Document {
     }
 
     // validate the contents now
-    List<String> errorList = validate(toModelNode, fromDocNode, toBasePath, type);
+    List<String> errorList = validate(toModelNode, fromDocNode, toBasePath, type, CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS);
 
     processErrors(errorList);
   }
 
-  private static List<String> validate(JsonNode modelNode, JsonNode docNode, String basePath, String type) {
+  private List<String> validate(JsonNode modelNode, JsonNode docNode, String basePath, String type, CONSTS_JDOCS.VALIDATION_TYPE validationType) {
     // function that invokes the recursive validation
     List<String> errorList = new ArrayList<>();
-    validate(modelNode, docNode, basePath, errorList, type);
+    validate(modelNode, docNode, basePath, errorList, type, validationType);
     return errorList;
   }
 
-  private static void validate(JsonNode modelNode, JsonNode docNode, String basePath, List<String> errorList, String type) {
+  private void validate(JsonNode modelNode, JsonNode docNode, String basePath, List<String> errorList, String type, CONSTS_JDOCS.VALIDATION_TYPE validationType) {
     // special handling in case the document starts with an array
     if ((modelNode.getNodeType().equals(JsonNodeType.ARRAY) == true) && (basePath.equals("$."))) {
       modelNode = modelNode.get(0);
@@ -2249,7 +2674,7 @@ public class JDocument implements Document {
       for (int i = 0; i < docNode.size(); i++) {
         JsonNode docChildNode = docNode.get(i);
         JsonNode dmChildNode = modelNode;
-        validate(dmChildNode, docChildNode, basePath + "[" + i + "]" + ".", errorList, type);
+        validate(dmChildNode, docChildNode, basePath + "[" + i + "]" + ".", errorList, type, validationType);
       }
     }
     else {
@@ -2265,8 +2690,14 @@ public class JDocument implements Document {
         while (true) {
           if (modelFieldNode == null) {
             // means that the field is not found in the data model
-            errorList.add(basePath + docFieldName + " -> path not found in data model -> " + type);
-            break loop;
+            if (validationType == CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS) {
+              errorList.add(basePath + docFieldName + " -> path not found in data model -> " + type);
+              break loop;
+            }
+            else {
+              // we continue to the next path as we are not going to be validating paths not found in the model
+              break;
+            }
           }
 
           // if node is an @ArrayNode
@@ -2275,13 +2706,13 @@ public class JDocument implements Document {
             for (int i = 0; i < docFieldNode.size(); i++) {
               JsonNode docChildNode = docFieldNode.get(i);
               JsonNode dmChildNode = modelFieldNode.get(0);
-              validate(dmChildNode, docChildNode, basePath + docFieldName + "[" + i + "]" + ".", errorList, type);
+              validate(dmChildNode, docChildNode, basePath + docFieldName + "[" + i + "]" + ".", errorList, type, validationType);
             }
             break loop;
           }
 
           if (docFieldNode.isObject() && modelFieldNode.isObject()) {
-            validate(modelFieldNode, docFieldNode, basePath + docFieldName + ".", errorList, type);
+            validate(modelFieldNode, docFieldNode, basePath + docFieldName + ".", errorList, type, validationType);
             break loop;
           }
 
@@ -2346,7 +2777,7 @@ public class JDocument implements Document {
 
         case BOOLEAN:
           if (BaseUtils.compareWithMany(filterValue, "true", "false") == true) {
-            filterNode.put(filterField, new Boolean(filterValue));
+            filterNode.put(filterField, Boolean.valueOf(filterValue));
           }
           else {
             throw new UnifyException("jdoc_err_53", filterField, path);
@@ -2358,11 +2789,11 @@ public class JDocument implements Document {
           break;
 
         case INTEGER:
-          filterNode.put(filterField, new Integer(filterValue));
+          filterNode.put(filterField, Integer.valueOf(filterValue));
           break;
 
         case LONG:
-          filterNode.put(filterField, new Long(filterValue));
+          filterNode.put(filterField, Long.valueOf(filterValue));
           break;
 
         case DECIMAL:
@@ -2488,7 +2919,7 @@ public class JDocument implements Document {
 
           case STRING:
             value = fieldNode.asText();
-            dt = DataType.STRING;
+            dt = STRING;
             break;
 
           default:
@@ -2600,6 +3031,34 @@ public class JDocument implements Document {
     Document newLeft = getContent(leftPath, false, false);
     Document newRight = right.getContent(rightPath, false, false);
     return newLeft.getDifferences(newRight, onlyDifferences);
+  }
+
+  @Override
+  public void validateAllPaths(String type) {
+    // function to validate the contents of the document. We will validate all data paths against the model
+    Document md = docModels.get(type);
+    if (md == null) {
+      throw new UnifyException("jdoc_err_29", type);
+    }
+    List<String> errorList = validate(((JDocument)md).rootNode, rootNode, "$.", type, CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS);
+    processErrors(errorList);
+    if (isTyped() == true) {
+      isValidated = true;
+    }
+  }
+
+  @Override
+  public void validateModelPaths(String type) {
+    // function to validate the contents of the document. We will validate only thos data paths that are found in the model
+    Document md = docModels.get(type);
+    if (md == null) {
+      throw new UnifyException("jdoc_err_29", type);
+    }
+    List<String> errorList = validate(((JDocument)md).rootNode, rootNode, "$.", type, CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS);
+    processErrors(errorList);
+    if (isTyped() == true) {
+      isValidated = true;
+    }
   }
 
 }
