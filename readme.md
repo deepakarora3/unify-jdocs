@@ -3,17 +3,22 @@
 ---
 JDocs (JSON Documents) is a JSON manipulation library.
 It completely eliminates the need to have model / POJO classes and instead works directly
-on the JSON document. Once you use this library, you may never 
+on the JSON document. Once you use this library, you may never
 want to return to using Java model classes or using JSON schema for JSON document validation.
 
-Once you have taken a look, if you like what you see, we would very much appreciate a like for the project - it keeps us motivated knowing that our
+Once you have taken a look, if you like what you see, we would very much appreciate a like for the project - it keeps us
+motivated knowing that our
 work is getting traction and helping people in the community.
 
-And while you are here, may we mention another of our offerings which could be of interest:
+And while you are here, may we mention a couple of our other offerings which could be of interest:
 
 ***Unify-flowret - A lightweight Java based orchestration engine***
 
 https://github.com/americanexpress/unify-flowret
+
+***Unify-simple-decision-table - A simple, lightweight Java based decision table implementation***
+
+https://github.com/americanexpress/unify-simple-decision-table
 
 ---
 
@@ -24,8 +29,13 @@ JDocs is available as a jar file in Maven central with the following latest Mave
 ```pom
 <groupId>com.americanexpress.unify.jdocs</groupId>
 <artifactId>unify-jdocs</artifactId>
-<version>1.8.0</version>
+<version>2.0.3</version>
 ```
+
+#### Version 2.x.x release alert
+
+Version 2.x.x is an upgrade that contains new features, minor bug fixes, removal of deprecated methods and some breaking changes.
+For migrating to 2.X.X, please refer to the guide on [migrating to version 2.x.x](#migrating-to-version-2xx) later on in this document.
 
 ---
 
@@ -68,9 +78,9 @@ public class Phone {
   String number;
 }
 ```
- 
+
 These Java classes created are referred to as model classes. The JSON document is parsed and converted into
-Java objects which are then used in the program. The process of converting JSON documents into 
+Java objects which are then used in the program. The process of converting JSON documents into
 language specific objects is known as ‘unmarshalling" and of converting the language specific objects
 back into JSON documents as "marshalling" i.e.
 
@@ -82,30 +92,32 @@ _Unmarshalling -> JSON document to Java object_
 
 #### Challenges faced in using model classes to work with JSON documents
 
-In an application program, model classes, marshalling and unmarshalling is extensively used to convert 
+In an application program, model classes, marshalling and unmarshalling is extensively used to convert
 JSON into Java objects and vice versa. This approach has the following challenges associated with it:
 
 1. The JSON to Java mapping and vice versa has to be created and maintained. Any time the JSON document
-structure changes, these classes must also be updated as also the programs using these classes.
-Having model objects creates an additional layer which always needs to be kept in sync with the JSON text
-document structure. The complexity is compounded by the fact that JSON documents can be arbitrary levels
-deep in which case keeping them in sync becomes ever more challenging. This also tightly couples the JSON
-document, model classes and the business logic code making the application difficult to change
-2. The problem of code bloat. Typically applications deal with multiple JSON document types.
-Each JSON document type may map to multiple Java classes. This situation leads to a plethora of
-Java classes and wrapper functions written to access fields in these classes. Over time
-this leads to code bloat consisting of numerous Java classes with limited value except for reading and writing JSON
-elements. Also, accessing nested fields / arrays may requires multiple lines of code as traversal of
-fields needs to be done across levels and null values / absent entries dealt with
+   structure changes, these classes must also be updated as also the programs using these classes.
+   Having model objects creates an additional layer which always needs to be kept in sync with the JSON text
+   document structure. The complexity is compounded by the fact that JSON documents can be arbitrary levels
+   deep in which case keeping them in sync becomes ever more challenging. This also tightly couples the JSON
+   document, model classes and the business logic code making the application difficult to change
+2. The problem of code bloat. Typically, applications deal with multiple JSON document types.
+   Each JSON document type may map to multiple Java classes. This situation leads to a plethora of
+   Java classes and wrapper functions written to access fields in these classes. Over time
+   this leads to code bloat consisting of numerous Java classes with limited value except for reading and writing JSON
+   elements. Also, accessing nested fields / arrays may requires multiple lines of code as traversal of
+   fields needs to be done across levels and null values / absent entries dealt with
 
 The consequences over time of the above are:
-1. Inability to carry out a fast, accurate and exhaustive impact analysis. For example, where all in the code base is this json path used?
+
+1. Inability to carry out a fast, accurate and exhaustive impact analysis. For example, where all in the code base is
+   this json path used?
 2. Changing JSON document structure becomes extremely difficult, tedious and error prone. In large code bases,
-it becomes next to impossible
+   it becomes next to impossible
 3. There is an adverse impact on performance leading to higher usage of system resources
 4. The code comprehension and readability suffers leading to maintainability issues
 5. Finally deterioration in quality, longer turnaround time for changes, higher efforts and
-ultimately higher costs and risks
+   ultimately higher costs and risks
 
 ---
 
@@ -117,22 +129,131 @@ manipulating JSON documents directly through JSON paths (with a slight home grow
 Doing away with model classes has the following benefits:
 
 1. Reduces the amount of code by ~90% which in turns means significantly faster implementations,
-reduced effort, improved quality and faster time to market
+   reduced effort, improved quality and faster time to market
 2. Helps developers concentrate on implementing business logic rather than spending time and effort on
-manipulating model classes to access data
+   manipulating model classes to access data
 3. Simplifies the way code is written and makes it easily comprehensible.
-To know which elements are being accessed, developers no longer need to go through lines and lines of
-code that only deal with traversing model classes and have very little to do with business logic
+   To know which elements are being accessed, developers no longer need to go through lines and lines of
+   code that only deal with traversing model classes and have very little to do with business logic
 4. Allows for fast, accurate and exhaustive impact analysis across the code base. Developers can in a matter of
-seconds locate all usages of a json path across the code base
+   seconds locate all usages of a json path across the code base
 5. By always referring to data as JSON paths, it allows developers to gain a much better understanding of
-the business domain, data and its usage
+   the business domain, data and its usage
 
 ---
 
 #### JDocs in Action
 
-Lets start with a sample JSON document as below:
+##### Initializing and closing the library
+
+The first thing we do is to initialize the library. For doing this, we use an object of the `Initializer` class. We 
+initialize the library once at the beginning in a single threaded context. Any attempt to
+initialize the library when it is already initialized will throw an exception. The `Initializer` class can be used in a fluent
+manner. Examples below:
+
+To initialize the library with default settings, use below static method:
+
+```java
+JDocument.init(new Initializer());
+```
+
+We can also initialize the library with the following custom options like below:
+
+```java
+JDocument.init(new Initializer()
+      .allowComments(true)
+      .stripTrailingBigDecimalZeroes(false)
+      .maxStringLength(10000000));
+```
+
+`allowComments`
+Boolean property that specifies if the JSON documents loaded by the library can contain comments or not. Default is 'true`'
+
+`stripTrailingBigDecimalZeroes`
+Boolean property that specifies if the underlying Jackson `ObjectMapper` strips the trailing zeroes when it
+encounters a decimal value in the JSON document. Default is `false`.
+
+`maxStringLength`
+Long Property that specifies the maximum value of the JSON string that can be read. The default value is the default used
+by the underlying Jackson library which is 5 million chars / bytes. In the above example, we are overriding this
+default to 10 million chars / bytes.
+
+At the end, the library should be closed in a single threaded context like so:
+
+````java
+JDocument.close();
+````
+
+##### Configuring runtime options
+
+There are a few options which can be configured during runtime. These can be set using an object of
+the `Configurator` class in a fluent manner as below:
+
+```java
+JDocument.configure(new Configurator()
+   .lineFeed("\n")
+   .deleteEmptyObject(false)
+   .deleteEmptyArray(false)
+   .defaultValidationType(CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS)
+   .docTypePrefixPolicy(new DocTypePrefixPolicyEnforceForAll())
+   .ignoreDocTypePrefixForBaseDocs(false));
+```
+
+`lineFeed`
+String value that specifies what the line feed value needs to be when a JSON document is generated. Default is `\n`.
+
+`deleteEmptyObject`
+Boolean value that specifies if the object which has become empty post a call to delete a path should be retained or deleted.
+The deletion of an empty object will only be done if it's parent is also an object. This option will not delete
+empty objects that are part of arrays. This is done to ensure that deletion of empty objects does not result in any
+change in the size of the arrays that it may be contained in. Another way to look at it is that only named objects which
+become empty would be deleted. Examples are provided in the test suite.
+
+The removal of empty objects is done only at the time of deleting a path. The deletion of empty objects
+is also done up through the hierarchy. For example, if the deletion of an object results in the parent object also
+becoming empty, then the parent object will also be deleted (if it's parent is an object) and so on up the hierarchy.
+
+Default is false.
+
+`deleteEmptyArray`
+Boolean value that specifies if the array which has become empty post a call to delete a path / value should be retained or deleted.
+The deletion of an empty array will only be done if it's parent is an object. Empty arrays, if appearing as elements of
+an array will not be deleted. This is done to ensure that deletion of empty arrays does not result in any
+change in the size of the arrays that it may be contained in. Another way to look at it is that only named arrays which
+become empty would be deleted.  Examples are provided in the test suite.
+
+Note that the removal of empty arrays is done only at the time of deleting a path. The deletion of empty arrays
+is also done up through the hierarchy. For example, if the deletion of an array results in the parent array also
+becoming empty, then the parent array will also be deleted and so on up the hierarchy.
+
+While moving up the hierarchy, JDocs ensures that the container object / array is retained / deleted based on the
+above values.
+
+Default is false. Note that empty arrays were being deleted in previous versions of JDocs (before 2.X).
+
+The remaining properties are set in the context of typed documents and are explained in the later section on the same.
+
+*Note that the default values for runtime properties are set up in the call to 'init' method itself. Hence, it is
+not required to call the `configure` method if the default values of runtime properties are acceptable.*
+
+Please note that most of the examples in this readme file are using the following options unless otherwise stated:
+
+```java
+JDocument.init(new Initializer()
+                       .allowComments(true)
+                       .stripTrailingBigDecimalZeroes(false));
+JDocument.configure(new Configurator()
+                            .defaultValidationPolicy(CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS)
+                            .docTypePrefixPolicy(new DocTypePrefixPolicyIgnoreForAll())
+                            .ignoreDocTypePrefixForBaseDocs(true)
+                            .lineFeed("\n"));
+
+```
+
+##### Reading and writing elements
+
+Let's start with a sample JSON document as below:
+
 ```json
 {
   "first_name": "Deepak",
@@ -145,8 +266,6 @@ Lets start with a sample JSON document as below:
   }
 }
 ```
- 
-##### Reading and writing elements
 
 The first step is to get a `Document` by so:
 
@@ -171,12 +290,12 @@ Let’s say you execute the following commands:
 d.setString("$.first_name", "John");
 d.setString("$.last_name", "Ryan");
 d.setString("$.middle_name", "Smith");
-d.setString("$.is_married", false);
+d.setBoolean("$.is_married", false);
 d.setInteger("$.number_of_children", 0);
 d.setString("$.home_address.zip", "85032");
 String s = d.getPrettyPrintJson();
 ```
- 
+
 The value of `s` will now be:
 ```json
 {
@@ -230,14 +349,14 @@ The value of `s` will be:
 
 From the above, note that complex objects person and person.address have automatically been created.
 
-So far so good and you may ask whats so special about this? There are libraries available that
+So far so good, and you may ask what is so special about this? There are libraries available that
 provide reading and writing of elements using JSON paths. Well, now let's start to make things interesting.
 
 ---
 
 ##### Reading and writing arrays
 
-Consider the following JSON document. Lets refer to it as snippet 1:
+Consider the following JSON document. Let's refer to it as snippet 1:
 
 ```json
 {
@@ -254,7 +373,7 @@ Consider the following JSON document. Lets refer to it as snippet 1:
 ```java
 Document d = new JDocument(json); // assuming json is a string containing snippet 1
 String s = d.getString("$.phones[0].type"); // will return Home
-s = getString("$.phones[0].number"); // will return 123456
+s = d.getString("$.phones[0].number"); // will return 123456
 ```
 
 Lets make things more interesting! You could refer to the array index by specifying a selection criteria. A
@@ -310,9 +429,10 @@ String s = d.getPrettyPrintJson();
 ```
 
 Note that JDocs when it did not find an array element with `type=Cell`, it went ahead and created one.
-By default, since the value of the field `type` is not being set explicitly, it assumed the field to be of `String` type.
+By default, since the value of the field `type` is not being set explicitly, it assumed the field to be of `String`
+type.
 If you had not wanted that, you could very well have used something like below:
- 
+
 ```java
 Document d = new JDocument(json); // assuming json is a string containing snippet 1
 d.setString("$.phones[type=Home].number", "222222")
@@ -343,7 +463,7 @@ The above would result in the following value of `s`:
 }
 ```
 
-Now for some interesting scenarios. You may ask what if I do the following?
+Now for some interesting scenarios. What if you do the following?
 
 ```java
 Document d = new JDocument(json); // assuming json is a string containing snippet 1
@@ -379,7 +499,7 @@ String s = d.getPrettyPrintJson();
 In this case, JDocs would throw an out of bounds exception as below:
 
 ```java
-com.americanexpress.unify.jdocs.UnifyException: Array index out of bounds -> phones
+com.americanexpress.unify.jdocs.UnifyException:Array index out of bounds->phones
 ``` 
 
 JDocs realized that an element was being attempted to be added at an index which did not have an element
@@ -392,10 +512,10 @@ You could use this same notation to create new arrays, create complex objects wi
 create arrays within arrays etc. An example of this is below:
 
 ```java
-Document d = new JDocument(json); // assuming json is a string containing snippet 1
-d.setString("$.addresses[0].type", "Home")
-d.setString("$.addresses[0].line_1", "Greenway Pkwy")
-String s = d.getPrettyPrintJson();
+Document d=new JDocument(json); // assuming json is a string containing snippet 1
+        d.setString("$.addresses[0].type","Home")
+        d.setString("$.addresses[0].line_1","Greenway Pkwy")
+        String s=d.getPrettyPrintJson();
 ```
 
 Now `s` will have the following value:
@@ -423,17 +543,19 @@ In case array indexes are used:
 1. In case the index exists, the element in that index will be updated
 2. In case the index does not exist and the index value is 0, an array element will be created
 3. In case the index does not exist and the index value is greater than 0, an element
-will be created only if the index is one greater than the maximum index in the existing array
+   will be created only if the index is one greater than the maximum index in the existing array
 
 In case an array selection criteria is used:
+
 1. If an element exists which contains the field and value as specified in the selection criteria,
-that element will be updated
+   that element will be updated
 2. If no element has a field as specified in the selection criteria, a new array element will
-be created with a field set to the value specified in the criteria
+   be created with a field set to the value specified in the criteria
 
 ---
 
 ##### Iterating arrays
+
 Now, specifying array indexes hard coded as above is fine. But in the real world, you do not know the number
 of elements that an array may have and so you need a way to find out the number of elements in the
 array and to be able to traverse over all the elements, read them and them and maybe set fields in them
@@ -614,9 +736,9 @@ d.deletePath("$.phones[%]", 0 + ""); // will delete the first element
 
 ##### The concept of Base and Typed Documents
 
-Till now we talked of operations which can be done on a free form JSON document meaning that it is 
+Till now we talked of operations which can be done on a free form JSON document meaning that it is
 possible to read and write pretty much any path we feel like. But what if we wanted to lock down the structure of a JSON
-document? Typically we would use something like JSON schema. We thought that there was a far simpler and 
+document? Typically, we would use something like JSON schema. We thought that there was a far simpler and
 more intuitive way to do the same thing. This is where we now start to talk of Base and Typed documents.
 
 In JDocs, there can be two types of documents. A Base document which we have worked with so far
@@ -642,7 +764,7 @@ Lets understand this using an example. Consider the snippet 4 below:
 ```json
 {
   "first_name": "Deepak",
-  "start_date": "28-Jan-2020 21:18:10 America/Phoenix",
+  "start_date": "01-28-2020 21:18:10 America/Phoenix",
   "id": 12345,
   "phones": [
     {
@@ -661,21 +783,21 @@ The model for the above JSON document would be defined as below:
 
 ```json
 {
-  "first_name": "{\"type\":\"string\"}",
-  "start_date": "{\"type\":\"date \"format\":\"dd-MM-yyyy HH:mm:ss VV",
-  "id": "{\"type\":\"integer\", \"regex\":\".*\"}",
-  "phones": [
-    {
-      "type": "{\"type\":\"string\"}",
-      "number": "{\"type\":\"integer\", \"regex\":\".*\"}"
-    }
-  ]
+   "first_name": "{\"type\":\"string\"}",
+   "start_date": "{\"type\":\"date\", \"format\":\"MM-dd-uuuu HH:mm:ss VV\"}",
+   "id": "{\"type\":\"integer\", \"regex\":\".*\"}",
+   "phones": [
+      {
+         "type": "{\"type\":\"string\"}",
+         "number": "{\"type\":\"integer\", \"regex\":\".*\"}"
+      }
+   ]
 }
 ```
 
 ---
 
-**Loading model documents**
+##### Loading model documents
 
 It is mandatory for a model to be loaded before a typed document of that type is created.
 Model documents can be loaded using the following:
@@ -689,7 +811,7 @@ JDocument.loadDocumentTypes(type, json);
 
 ---
 
-**Creating typed documents**
+##### Creating typed documents
 
 ```java
 Document d = new JDocument("model", null);
@@ -720,88 +842,310 @@ d.setInteger("$.phones[0].number", 333333);
 ```
 
 Whereas the following will fail:
+
 ```java
-d.setString("$.first_name1", "Deepak1") // incorrect path
-d.setString("$.start_date", "15-Apr-2019") // incorrect date format
-d.setString("$.phones[0].number", "111111") // incorrect data type
+d.setString("$.first_name1","Deepak1") // incorrect path
+        d.setString("$.start_date","15-Apr-2019") // incorrect date format
+        d.setString("$.phones[0].number","111111") // incorrect data type
 ```
 
 As regards constraints, the validation is done against the specified regular expression. If a match returns true, the
 validation is assumed to succeed else an exception is thrown.
 
-The following attributes are implemented as part of specifying a constraint on a path:
+The following attributes can be specified as part of a constraint on a path:
 
-S. No. | Field Name | Description | Type | Mandatory?
------- | --------------- | ------------| ---- | ----------
-1 | type | Defines the type of the field. Possible values are string, integer, long, decimal, boolean, date | String | Yes
-2 | regex | The pattern against which the value will be validated | string | No
-3 | null_allowed | Specifies if null is a valid value for the field. If not specified, default is null not allowed. If value is null and allowed, regex will be ignored | boolean | No
-4 | ignore_regex_if_empty_string | If not specified, default is false. If specified to true, regex will be ignored if value is empty. Applicable only for string type fields | boolean | No
-5 | format | Only applicable for date type. Specification is as per DateTimeFormatter | string | Yes
-6 | empty_date_allowed | Only applicable for date type fields. If not specified, default is true. If allowed format check is ignored  | boolean | No
+<table>
+  <thead>
+    <tr>
+      <th>S. No.</th>
+      <th>Field Name</th>
+      <th>Description</th>
+      <th>Type</th>
+      <th>Mandatory?</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>1</td>
+      <td>type</td>
+      <td>Defines the type of the field. Possible values are string, integer, long, decimal, boolean, date</td>
+      <td>string</td>
+      <td>Yes</td>
+    </tr>
+    <tr>
+      <td>2</td>
+      <td>regex</td>
+      <td>The pattern against which the value will be validated. Applicable for all data types except date</td>
+      <td>string</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>3</td>
+      <td>ignore_regex_if_empty_string</td>
+      <td>Applicable only for string data type as other data types cannot have an empty value. Default if not specified is false</td>
+      <td>boolean</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>4</td>
+      <td>null_allowed</td>
+      <td>Specifies if null is a valid value for the field. Applicable for all data types. If not specified, default is false i.e. not allowed. If value is null and allowed, regex will be ignored</td>
+      <td>boolean</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>5</td>
+      <td>format</td>
+      <td>Applicable only for date data type. Specification is as per DateTimeFormatter</td>
+      <td>string</td>
+      <td>Yes (only for date data type)</td>
+    </tr>
+    <tr>
+      <td>6</td>
+      <td>empty_date_allowed</td>
+      <td>Applicable only for date data type. If not specified, default is true. If allowed, format check is ignored</td>
+      <td>boolean</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>7</td>
+      <td>min_length</td>
+      <td>Applicable only for string data type. Minimum length of field value if not null</td>
+      <td>integer</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>8</td>
+      <td>max_length</td>
+      <td>Applicable only for string data type. Maximum length of field value if not null</td>
+      <td>integer</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>9</td>
+      <td>min_value</td>
+      <td>Applicable only for integer, long and decimal data types. Minimum value of field value if not null. This value should match the data type</td>
+      <td>integer|long|decimal</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>10</td>
+      <td>max_value</td>
+      <td>Applicable only for integer, long and decimal data types. Maximum value of field value if not null. This value should match the data type</td>
+      <td>integer|long|decimal</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>11</td>
+      <td>min_date</td>
+      <td>Applicable only for date data types. Minimum date of field value if not null. This value should match the date format specification as defined in the format value</td>
+      <td>string</td>
+      <td>No</td>
+    </tr>
+    <tr>
+      <td>12</td>
+      <td>max_date</td>
+      <td>Applicable only for date data types. Maximum date of field value if not null. Note that this value should match the date format specification as defined in the format value</td>
+      <td>string</td>
+      <td>No</td>
+    </tr>
+  </tbody>
+</table>
 
-**Validating typed documents**
+Below is the model for the above specifications:
+
+```json
+{
+   "type": "{\"type\":\"string\"}",
+   "null_allowed": "{\"type\":\"boolean\"}",
+   "regex": "{\"type\":\"string\"}",
+   "ignore_regex_if_empty": "{\"type\":\"boolean\"}",
+   "format": "{\"type\":\"string\"}",
+   "empty_date_allowed": "{\"type\":\"boolean\"}",
+   "min_length": "{\"type\":\"integer\"}",
+   "max_length": "{\"type\":\"integer\"}",
+   "min_value": "{\"type\":\"integer|long|decimal\"}",
+   "max_value": "{\"type\":\"integer|long|decimal\"}",
+   "min_date": "{\"type\":\"string\"}",
+   "max_date": "{\"type\":\"string\"}"
+}
+
+```
+
+##### Validating typed documents
 
 Typed documents may be validated when:
 
 1. They are constructed
-2. At the time of specifying the type of a base document (`setType` method)
+2. At the time of specifying the type of base document (`setType` method)
 3. When calling the `validateAllPaths` or `validateModelPaths` methods
 4. When calling the `getXXX` or `setXXX` methods on the document e.g. `getString` / `setString`
 
-There are three types of validations mechanism that can be specified:
+There are three types of validation modes supported:
 
 `CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS`
 
-All paths found in the document will be validated against the model document.
+Validate all paths found in the document against the model document.
 
 `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS`
 
-Only those data paths for which model paths exists will be validated against the model document.
+Validate only those data paths (against the model document) for which model paths exists. This is the default value if not explicitly set.
 
 `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE`
 
-Validations will be performed only when a data path is read or written by the use of
-`getXXX` and `setXXX` methods.
+Validate only when a data path is read or written by the use of `getXXX` and `setXXX` methods.
 
 The validation types `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS`
 and `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE`
 are used in scenarios where we may be getting extra fields / paths from an external entity (think an API response) and
-these paths are not part of our model document. In such cases, we can look to validate the paths which are found in the
-model document or validate them only at read and write of paths.
+these paths are not part of our model document. In such cases, we can look to validate only the paths found in the
+model document or validate them only at the time of reading and writing paths.
 
 This is a typical scenario in the use of APIs which can return extra blocks and paths which may not be present in the
-model document and which we may not be interested in. If we were to validate at the time of creating the document, the
-model validations would fail unless we kept the model document in sync with all the changes happening on the API side.
-Most of the times, this is not possible as the teams are separate and there is no reason that adding fields to the
+model document and which we may not be interested in. If we were to validate all paths of the document at the time of creating the document, the
+model validations would fail unless we kept the model document in sync with all the changes happening on the remote API side.
+Most times, this is not possible as the teams are separate and there is no reason that adding fields to a
 response which we are not interested in should cause a failure.
 
-The validation mechanism can be set at the whole of JDocs level or at a per document level. To set the validation
-mechanism at a JDocs level, initialize JDocs by specifying the validation type in the `init` method as below. This
-validation type will come into effect for all typed documents unless a validation type has been specified explicitly for
-a document:
+The validation mode can be set for all documents at JDocs level or can be overridden at a per-document level. To set the validation
+mechanism at a JDocs level, we use the `Configurator` object. In the code snippet below, we set the validation
+policy to `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE`:
 
-`public static void init(CONSTS_JDOCS.VALIDATION_TYPE validationType)`
+```java
+    new JDocument.Configurator()
+            .defaultValidationType(CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE)
+            .configure();
+```
 
-If the `init` method is called without any parameters, then `CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS` is assumed
-default.
-
-We can also specify the validation type independently at the document level. Assuming that we have called the default
-`init` method (with no parameters), lets say that for only one document in a particular instance, we wanted to use
-`CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS` validation mechanism. We could override JDocs default validation
-mechanism by specifying the validation while constructing the document as below:
+In case we wanted to override the validation mode at a document level, we could do at the time of creating the
+document or at the time of setting its type as shown below:
 
 `Document d = new JDocument(type, json, CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS);`
 
-or while setting the type of a base document as below:
-
 `d.setType(type, CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS);`
 
-There are also a couple of utility methods to validate a document against a model as below:
+##### Validating documents against different models
+
+Both base and typed documents can be validated against different models. This scenario come in handy when there may
+be different validations required for data originating from different use cases. For example, if we were to collect
+customer information for name or address, there may be a need to have different validations for data collected for
+different countries. The special characters that could be included for US may be different from what could be included
+for France. In order to accomplish this, we would define multiple model documents that may only be used for validation.
+The following validation methods allow us to do such validations.
 
 `public void validateAllPaths(String type);`
 
 `public void validateModelPaths(String type);`
+
+##### Using document type prefix in the path
+
+For typed document, when specifying paths, it would help to explicitly know the type of the underlying document that we are working on.
+For example, when we specify a path like `"$.id"`, it is not clear what the underlying document type is.
+The reason that this is important is, because when we have lots of different document types, the same path could exist across document types.
+And in such a scenario, knowing where all this path exists in the codebase could become a challenge.
+
+To address this, JDocs offers a feature wherein we could prefix the path with the document type and JDocs would validate the same.
+For example, if we have a document type `car_application`, we could prefix its paths with the document type as below:
+
+`"car_application$.id"`
+
+If there was another document type say `loan_application` which also contained the same path, then we could prefix its paths as below:
+
+`"loan_application$.id"`
+
+By doing this, we can now uniquely identify in the codebase, all occurrences of any path of `car_application` or `loan_application`.
+
+JDocs, at runtime, would check if the document type path prefix matches the document type of the underlying document and would
+throw an exception if not. To remain backward compatible, JDocs can be told to enforce / ignore this validation for
+certain / all document types through the use of the runtime property `docTypePrefixPolicy` which can be set using
+the `Configurator` object.
+
+Note that, irrespective of the value of the property, JDocs will never ignore a mismatch between the document type path prefix
+and the underlying document type. If the document type path prefix is specified and does not match the underlying document type,
+JDocs will always throw an exception. This is further explained below in the description of the policies.
+
+Clients can create an instance of one of the following policy classes and supply to the `docTypePathPrefixPolicy` method of the
+`Configurator` object. Note that only one policy type can be in force at any given time. The default is `DocTypePrefixPolicyEnforceForAll`.
+
+`DocTypePrefixPolicyEnforceForAll`
+By specifying this policy, we tell JDocs to enforce the prefixing of a path with the document type name for all document types.
+During runtime, if JDocs encounters a path for which the underlying document is a typed document and the document type
+is not prefixed in the path, it will throw an exception. This property can be set as below. This is also the default value
+if the property is not set:
+
+```java
+new JDocument.Configurator()
+      .docTypePrefixPolicy(new DocTypePrefixPolicyEnforceForAll())
+      .configure();
+```
+
+`DocTypePrefixPolicyEnforceForSome`
+By specifying this policy, we tell JDocs to enforce the prefixing of a path with the document type only for specified document types.
+The set of document types for which we want to enforce is supplied as a parameter to the method as below: 
+
+```java
+Set<String> set = new HashSet<>(Arrays.asList("type1", "type2", "type3"));
+new JDocument.Configurator()
+      .docTypePrefixPolicy(new DocTypePrefixPolicyEnforceForSome(set))
+      .configure();
+```
+
+If the path is not prefixed with the document type for the specified document types, JDocs will throw an exception. For all other
+document types, if the path is not prefixed, JDocs will ignore.
+
+Note that JDocs will always throw an exception if the document type prefix is specified and does not match the underlying document type.
+For example, if we prefix the path for a document whose underlying type is `type4` as `typeX`, JDocs will throw an exception even though
+`type4` was not in the list of document types to enforce. JDocs will only ignore the non-specification of the type but not the
+specification of an incorrect type.
+
+`DocTypePrefixPolicyIgnoreForAll`
+By specifying this policy, we tell JDocs not to enforce the prefixing of a path with the document type for any document type.
+This property can be set as below:
+
+```java
+new JDocument.Configurator()
+      .docTypePrefixPolicy(new DocTypePrefixPolicyIgnoreForAll())
+      .configure();
+```
+
+Note that JDocs will always throw an exception if the document type prefix is specified and does not match the underlying document type.
+For example, if we prefix the path for a document whose underlying type is `type4` as `typeX`, JDocs will throw an exception.
+JDocs will only ignore the non-specification of the type but not the specification of an incorrect type.
+
+`DocTypePrefixPolicyIgnoreForSome`
+By specifying this policy, we tell JDocs to enforce the prefixing of a path with the document type for all types except the ones specified.
+The set of document types for which we want to ignore is supplied as a parameter to the method as below:
+
+```java
+Set<String> set = new HashSet<>(Arrays.asList("type1"));
+new JDocument.Configurator()
+      .docTypePrefixPolicy(new DocTypePrefixPolicyIgnoreForSome(set))
+      .configure();
+```
+
+If the path is not prefixed with the document type for the specified document types, JDocs will ignore the same. For all other
+document types, if the path is not prefixed, JDocs will throw an exception.
+
+Note that JDocs will always throw an exception if the document type prefix is specified and does not match the underlying document type.
+In this example, if we prefix the path for a document whose underlying type is `type1` as `typeX`, JDocs will throw an exception even though
+`type1` is in the list of document types to ignore. JDocs will only ignore the non-specification of the type but not the
+specification of an incorrect type.
+
+**Document type path prefix handling for base documents**
+
+It may so happen that we could specify the document type path prefix but the underlying document may not be a typed document. This
+situation could arise in existing codebases where we may start out with a base document and then use the 
+method `setType` to convert to a typed document but at the same time prefix all paths of this document with the document type.
+ 
+JDocs provides a runtime property `ignoreDocTypePrefixForBaseDocs`. This property can be set using the `Configurator` object
+and if set to `false`, tells JDocs to throw a runtime exception if the document type path prefix is specified but the underlying document is
+not a typed document. If set to `true`, this would be ignored (allowed). The default value is `false`.
+
+```java
+new JDocument.Configurator()
+      .ignoreDocTypePrefixForBaseDocs(false)
+      .configure();
+```
 
 ---
 
@@ -812,46 +1156,46 @@ Given a document, it is possible to extract content from it as a new document. C
 ```json
 {
    "id": "id",
-  "family" : {
-    "number_of_members": 2,
-    "members": [
-      {
-        "name": "Deepak Arora",
-        "phones": [
-          {
-            "type": "Home",
-            "number": "1111111111"
-          },
-          {
-            "type": "Cell",
-            "number": "2222222222"
-          }
-        ]
-      },
-      {
-        "name": "Nitika Kaushal",
-        "phones": [
-          {
-            "type": "Home",
-            "number": "3333333333"
-          },
-          {
-            "type": "Cell",
-            "number": "4444444444"
-          }
-        ]
-      }
-    ]
-  }
+   "family": {
+      "number_of_members": 2,
+      "members": [
+         {
+            "name": "Deepak Arora",
+            "phones": [
+               {
+                  "type": "Home",
+                  "number": "1111111111"
+               },
+               {
+                  "type": "Cell",
+                  "number": "2222222222"
+               }
+            ]
+         },
+         {
+            "name": "Nitika Kaushal",
+            "phones": [
+               {
+                  "type": "Home",
+                  "number": "3333333333"
+               },
+               {
+                  "type": "Cell",
+                  "number": "4444444444"
+               }
+            ]
+         }
+      ]
+   }
 }
 ```
 
 We can extract content like below:
 
 ```java
-Document d = new JDocument(json); // assuming json is a string containing above snippet
-Document d1 = d.getContent("$.family.members[1].phones[0]", false, true);
-String s = d1.getPrettyPrintJson();
+Document d=new JDocument(json); // assuming json is a string containing above snippet
+        Document d1=d.getContent("$.family.members[1].phones[0]",false,true);
+        String s=d1.getPrettyPrintJson();
 ```
 
 The value of `s` will contain:
@@ -873,7 +1217,8 @@ The value of `s` will contain:
 }
 ```
 
-Note that the third parameter (`includeFullPath`) is specified as `true`. This means that return the full path in the document. Had we set
+Note that the third parameter (`includeFullPath`) is specified as `true`. This means that return the full path in the
+document. Had we set
 that to `false`, the following would have been returned:
 
 ```json
@@ -887,7 +1232,7 @@ The path specified in this method has to point to either:
 * a complex object
 * an array element (which also needs to be a complex object)
 * an array (like `phones[]`). In this case, the `includeFullPath` parameter has to be false else the API
-will throw an exception
+  will throw an exception
 
 In case the document we are extracting content from is a `TypedDocument`, then we have the option of returning
 a `BaseDocument` or a `TypedDocument`. This is specified using the second parameter `returnTypedDocument`. If this
@@ -897,9 +1242,10 @@ is not a `TypedDocument`, this parameter is ignored.
 
 Of course, if a `TypedDocument` is being returned, its needs to conform to the structure of the model document. In
 this situation, if we specify `includeFullPath = false`, it is possible that the returned document when constructed
-will not conform to the model document in which case the API will throw an exception. 
+will not conform to the model document in which case the API will throw an exception.
 
-As with other methods in the API, the path can contain `%` and the value specified in the last variable arguments parameter.
+As with other methods in the API, the path can contain `%` and the value specified in the last variable arguments
+parameter.
 
 ---
 
@@ -1041,11 +1387,12 @@ to.merge(from, null);
 String s = to.getPrettyPrintJson();
 ```
 A couple of points to note here:
+
 1. The second parameter of `merge` is a variable string argument and can be used to specify paths
-which need to be deleted in the to document before the merge is carried out
+   which need to be deleted in the to document before the merge is carried out
 2. If array elements are being merged, JDocs expects the key field to be specified. This is required
-so that JDocs can look up the array element in the to document to merge the from contents into. If no
-such array element is found in the to document, a new array element with the specified key is created 
+   so that JDocs can look up the array element in the to document to merge the from contents into. If no
+   such array element is found in the to document, a new array element with the specified key is created
 
 JDocs will throw an exception in case of mismatches encountered during merge, for example,
 the data type of the "to" path may not match with that of the "from" path
@@ -1069,7 +1416,7 @@ to play them back to see how the updates occurred.
 ##### Using @here in model documents
 
 Consider a scenario where there is a loan processing application document and its associated model. Assume that
-a service is called to the contents of the application document have to be passed in one of the 
+a service is called to the contents of the application document have to be passed in one of the
 JSON fields of the service request. In such a scenario, when a model document for the service request is created,
 the contents of the model document of the application document have to be embedded in it. Imagine if we
 had many more such cases and kept embedding application document everywhere as required. This
@@ -1097,7 +1444,7 @@ Consider the following application model document:
 Now consider that there is a `storeApplication` REST service which persists the contents of the document
 to a database. This service has it own request JSON model document and the contents of the application
 are present in a field. Without the use of @here feature, the model document for tthe service request
-would look like: 
+would look like:
 
 ```json
 {
@@ -1123,10 +1470,10 @@ Using @here, the model document for the service request can be written as:
 
 ```json
 {
-  "request_id": "{\"type\":\"string\"}",
-  "application": {
-     "@here": "/common/docs/models/application.json"
-  }
+   "request_id": "{\"type\":\"string\"}",
+   "application": {
+      "@here": "/common/docs/models/application.json"
+   }
 }
 ```
 
@@ -1143,7 +1490,7 @@ The below snippet will search the document for an array element in the phones
 array where the field type has the value home. Note that in order to use this API, the final element
 needs to be an array in which a selection criteria is specified. Also note that the selection criteria
 can refer to any field in the element and the index of the match of the first occurrence will be returned. In
-case it is required to read further, an iteration as described previously is recommended. 
+case it is required to read further, an iteration as described previously is recommended.
 
 ```java
 Document d = new JDocument(s); // s contains a valid JSON string
@@ -1169,17 +1516,17 @@ JDocs provides a different set of read and write methods to work with such const
 are similar to getXXX and setXXX methods and are listed below:
 
 ```java
-  Boolean getArrayValueBoolean(String path, String... vargs);
-  Integer getArrayValueInteger(String path, String... vargs);
-  String getArrayValueString(String path, String... vargs);
-  Long getArrayValueLong(String path, String... vargs);
-  BigDecimal getArrayValueBigDecimal(String path, String... vargs);
-  
-  void setArrayValueBoolean(String path, boolean value, String... vargs);
-  void setArrayValueInteger(String path, int value, String... vargs);
-  void setArrayValueLong(String path, long value, String... vargs);
-  void setArrayValueBigDecimal(String path, BigDecimal value, String... vargs);
-  void setArrayValueString(String path, String value, String... vargs);
+  Boolean getArrayValueBoolean(String path,String...vargs);
+        Integer getArrayValueInteger(String path,String...vargs);
+        String getArrayValueString(String path,String...vargs);
+        Long getArrayValueLong(String path,String...vargs);
+        BigDecimal getArrayValueBigDecimal(String path,String...vargs);
+
+        void setArrayValueBoolean(String path,boolean value,String...vargs);
+        void setArrayValueInteger(String path,int value,String...vargs);
+        void setArrayValueLong(String path,long value,String...vargs);
+        void setArrayValueBigDecimal(String path,BigDecimal value,String...vargs);
+        void setArrayValueString(String path,String value,String...vargs);
 ```
 
 The model document for the above would be defined as:
@@ -1213,7 +1560,7 @@ Consider the following JSON snippet:
 ```
 
 The flatten API of JDocs gives us a list of all the paths present in the document with or without values.
-The following gets the list of paths without values: 
+The following gets the list of paths without values:
 
 ```java
 Document d = new JDocument(json); // assuming json is a string containing above snippet
@@ -1268,7 +1615,7 @@ JSON snippet 1:
   },
   "cars": [
     {
-      "make": "Honda",
+      "make": "CB1",
       "model": null
     }
   ],
@@ -1329,14 +1676,291 @@ object returned from the call `di.getLeft()` or `di.getRight`. We could also use
 `getDataType` in case we wanted to get the data type of the value.
 
 Please note the following regarding comparing JSON documents:
+
 1. JDocs does a logical comparison of the documents. When fields with null values are encountered, they
-are treated as being equivalent to the field not being present in the document. In the above example,
-in the left document, `$.cars[0].model` has null value while this path is not present in the right document.
-JDocs comparison assumes that these are equivalent. In other words a JSON path leaf node having a null values
-is assumed to be the same as the path not existing at all.
+   are treated as being equivalent to the field not being present in the document. In the above example,
+   in the left document, `$.cars[0].model` has null value while this path is not present in the right document.
+   JDocs comparison assumes that these are equivalent. In other words a JSON path leaf node having a null values
+   is assumed to be the same as the path not existing at all.
 1. If any one of the documents being compared is a typed document, the data type of the path will be determined
-from the model document
- 
+   from the model document
+
+**Removing null fields and empty objects / arrays**
+
+JDocs provides a method which can be used to remove the following from a document:
+
+1. Remove any fields that have null value as long as they are named fields
+2. Remove any empty objects up the hierarchy as long as they are not an array element
+3. Remove any empty arrays up the hierarchy
+
+The following method can be used to carry out the above:
+
+```java
+public void removeNullsAndEmpty(boolean removeNullFields, boolean removeEmptyObjects, boolean removeEmptyArrays)
+```
+
+**JSON features not supported**
+
+1. Multidimensional arrays like below:
+
+```json
+{
+   "data": [
+      [
+         [
+            
+         ]
+      ]
+   ]
+}
+```
+
+The reasons for not supporting this construct of JSON is because the primary objective of JDocs is to be able to work
+on structured documents that can be represented in a "path" notation and whose structure is known to the program
+beforehand. At present, the JDocs "path" notation assumes that each array will either be a sequence of values or will be
+a sequence of objects. Maybe, at some point in the future, we will consider adding this support by upgrading the
+"path" notation.
+
+2. Different data types in an array
+
+The following construct, through supported by JDocs is not a good candidate to be used in JDocs as there is no way at
+present to fully navigate / parse through a JSON document except to use flatten with values. As mentioned earlier, the intent
+of JDocs is to be able to primarily read and write data whose structure is known beforehand to the program. We do realize that
+we could tweak certain API methods / add new ones that would make this possible and this is left for the future.
+
+Having said the above, it needs to be pointed out that JDocs supports reading and writing of such data if we know the
+shape of the data beforehand (the data type of each element) and thereby use the right get and set API
+but this would fall through if the data types of the incoming elements changed dynamically.
+
+```json
+{
+   "data": [
+      "value_1",
+      10,
+      {
+         "field": "1"
+      },
+      false
+   ]
+}
+```
+
+**Static JDocument methods**
+
+Following are the public static methods available for clients to use. The description of each method is given inline
+in the comments.
+
+```java
+// used to initialize the JDocs library. Should be called only once in the beginning in a single threaded context
+public static void init(Initializer initializer)
+
+// used to configure the JDocs library - can be called at any time to change the configuration options   
+public static void configure(Configurator configurator)
+
+// returns the default validation type policy in force
+public static CONSTS_JDOCS.VALIDATION_TYPE getDefaultValidationType()
+
+// loads the document model and makes it available to JDocs to use from the json string for the specified type
+public static void loadDocumentModel(String type, String json)
+
+// loads the document model and makes it available to JDocs to use from the document for the specified type
+public static void setDocumentModel(String type, Document model)
+
+// returns boolean value indicating if the document model for the specified type is loaded or not
+public static boolean isDocumentModelLoaded(String type)
+
+// closes the JDocs library. Should be done once in the end
+public static void close()
+
+// get a copy of the document model for the specified type - null if not found
+public static Document getDocumentModel(String type)
+
+// returns boolean value that specifies if comments are allowed in json documents or not
+public static boolean getAllowComments()
+
+// returns boolean value that specifies if trailing zeros from big decimal are stripped or not
+public static boolean getStripTrailingBigdecimalZeroes()
+
+// returns the value of the linefeed being used
+public static String getLineFeed()
+
+// returns the document type path prefix policy in use 
+public static DocTypePrefixPolicy getDocTypePrefixPolicy()
+
+// returns boolean value that specifies if trailing zeros from big decimal are stripped or not
+public static boolean getIgnoreDocTypePrefixForBaseDocs()
+
+// returns boolean value that specifies if resulting empty objects from a delete path call should be deleted or not 
+public static boolean getDeleteEmptyObject()
+
+// returns boolean value that specifies if resulting empty arrays from a delete path call should be deleted or not 
+public static boolean getDeleteEmptyArray()
+```
+
+---
+
+##### Migrating to version 2.x.x
+
+Version 2.x.x is an upgrade that contains the following:
+
+**Breaking changes**
+1. A new way to initialize JDocs and the set configuration options. Please refer to
+   [Initializing JDocs](#initializing-and-closing-the-library) and
+   [Configuring runtime properties](#configuring-runtime-properties)
+2. Removal of deprecated methods.
+
+**New features**
+1. New configuration options to delete empty objects and arrays when deleting a path.
+   Explained in section [Configuring runtime properties](#configuring-runtime-properties).
+2. For typed documents, a new feature to specify the document type name as the 
+   path prefix (and to be able to ignore this for non typed / base documents). Explained in section
+   [Using document type prefix in the path](#using-document-type-prefix-in-the-path).
+
+For clients who use version 2.x.x directly or for the first time, there are no special considerations. You can simply
+go through the documentation and go with default options or change them as per your preference. Do however note that
+going in with the default options gives you the most optimal way of using JDocs in the long run.
+
+Below notes are for clients who may already be using JDocs and who want to upgrade to version 2.x.x.
+
+**Replacing the usage of deprecated static `init` methods**
+
+If using the below deprecated static methods of `JDocument` class:
+
+```java
+public static void init()
+public static void init(boolean defaultValidateAtReadWriteOnly)
+```
+
+replace with one call to initialize (using the `Initializer` object) and then one call to configure (using the
+`Configurator` object) using below methods:
+
+```java
+public static void init(Initializer initializer)
+public static void configure(Configurator configurator)
+```
+
+The initialization and configuration are outlined in section
+[Initializing the library](#initializing-and-closing-the-library) and
+[Configuring runtime properties](#configuring-runtime-properties).
+
+If `defaultValidateAtReadWriteOnly` was set to `true`, use the enum `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE`
+while setting the property in the `Configurator` object.
+
+If `defaultValidateAtReadWriteOnly` was set to `false`, use the enum `CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS`. Note that
+you also have the option of using the enum `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS`.
+
+If using the below deprecated static method of `JDocument` class:
+
+```java
+public static void init(CONSTS_JDOCS.VALIDATION_TYPE validationType)
+```
+
+set the same validation type while setting the properties of `Configurator` object.
+
+**Setting the value of the configuration option `deleteEmptyObject`**
+
+In versions earlier to 2.x.x, on calling the `deletePath` method, resulting empty objects were not being deleted. Hence,
+existing clients may want to retain this behaviour either by not setting the value of this
+configuration option (default value is `false`) or by explicitly setting the value of this
+configuration option to `false`. The value of this option can be set using the `Configurator` object as
+explained in [Configuring runtime properties](#configuring-runtime-properties).
+
+**Setting the value of the configuration option `deleteEmptyArray`**
+
+In versions earlier to 2.x.x, on calling the `deletePath` method,  resulting empty arrays were being deleted. Hence,
+existing clients may want to retain this behaviour by explicitly setting the value of this
+configuration parameter to `true` (default value is `false`). The value of this parameter can be set using the `Configurator` object as
+explained in [Configuring runtime properties](#configuring-runtime-properties).
+
+**Replacing the usage of deprecated `JDocument` constructor method**
+
+If using the below deprecated method:
+
+```java
+public JDocument(String type, String json, boolean validateAtReadWriteOnly)
+```
+
+replace with below:
+
+```java
+public JDocument(String type, String json, CONSTS_JDOCS.VALIDATION_TYPE validationType)
+```
+
+If `validateAtReadWriteOnly` was set to `true`, use the enum `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE`.
+
+If `validateAtReadWriteOnly` was set to `false`, use the enum `CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS`. Note that
+you also have the option of using the enum `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS` as the case may be.
+
+**Replacing the usage of deprecated `getDefaultValidateAtReadWriteOnly` method of `JDocument` class**
+
+If using the below deprecated method:
+
+```java
+public boolean getDefaultValidateAtReadWriteOnly()
+```
+
+replace with below:
+
+```java
+public static CONSTS_JDOCS.VALIDATION_TYPE getDefaultValidationType()
+```
+
+The new method will return either of the below enums:
+
+```java
+CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS
+CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS
+CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE
+```
+
+The earlier return boolean value of `false` corresponds to `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE`. An earlier
+return value of `true` corresponds to either `CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS` or `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS`
+depending upon what value is in force. Clients can then take action accordingly.
+
+**Replacing the usage of deprecated `setType` method**
+
+If using the below deprecated method of `Document` / `JDocument`:
+
+```java
+void setType(String type, boolean validateAtReadWriteOnly);
+```
+
+replace with below:
+
+```java
+void setType(String type, CONSTS_JDOCS.VALIDATION_TYPE validationType);
+```
+
+If `validateAtReadWriteOnly` was set to `true`, use the enum `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE`.
+
+If `validateAtReadWriteOnly` was set to `false`, use the enum `CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS`.
+
+Note that
+you also have the option of using the enum `CONSTS_JDOCS.VALIDATION_TYPE.ONLY_MODEL_PATHS` as the case may be.
+
+**Replacing the usage of deprecated `validate` method**
+
+If using the below deprecated method:
+
+```java
+public void validate(String type);
+```
+
+replace with below:
+
+```java
+void validateAllPaths(String type);
+```
+
+Note that in the deprecated method, the validation of all data paths present in the document was being done.
+And so to remain backward compatible, the recommendation to use the method `validateAllPaths`. However, in
+2.x.x, clients have a choice to either validate all data paths in the document or validate only those data paths
+which are present in the model document. Clients can use the below method to implement the latter of the above:
+
+```java
+void validateModelPaths(String type);
+```
+
 ---
 
 ##### What is unique about JDocs?
@@ -1368,6 +1992,7 @@ Provide us feedback. We would love to hear from you.
 ---
 
 ##### Author:
+
 Deepak Arora, GitHub: @deepakarora3, Twitter: @DeepakAroraHi
 
 ---
@@ -1376,7 +2001,7 @@ Deepak Arora, GitHub: @deepakarora3, Twitter: @DeepakAroraHi
 
 We welcome Your interest in the American Express Open Source Community on Github. Any Contributor to
 any Open Source Project managed by the American Express Open Source Community must accept and sign
-an Agreement indicating agreement to the terms below. Except for the rights granted in this 
+an Agreement indicating agreement to the terms below. Except for the rights granted in this
 Agreement to American Express and to recipients of software distributed by American Express, You
 reserve all right, title, and interest, if any, in and to Your Contributions. Please
 [fill out the Agreement](https://cla-assistant.io/americanexpress/unify-jdocs).

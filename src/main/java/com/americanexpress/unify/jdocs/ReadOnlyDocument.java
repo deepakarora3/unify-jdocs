@@ -14,7 +14,6 @@
 
 package com.americanexpress.unify.jdocs;
 
-
 import com.americanexpress.unify.base.UnifyException;
 
 import java.math.BigDecimal;
@@ -63,12 +62,6 @@ public class ReadOnlyDocument implements Document {
 
   @Override
   public void setType(String type) {
-    throw new UnifyException("jdoc_err_19");
-  }
-
-  @Override
-  @Deprecated
-  public void setType(String type, boolean validateOnReadWriteOnly) {
     throw new UnifyException("jdoc_err_19");
   }
 
@@ -268,19 +261,23 @@ public class ReadOnlyDocument implements Document {
   }
 
   @Override
-  @Deprecated
-  public void validate(String type) {
-    d.validate(type);
-  }
-
-  @Override
   public boolean isLeafNode(String path, String... vargs) {
     return d.isLeafNode(path, vargs);
   }
 
   @Override
   public CONSTS_JDOCS.VALIDATION_TYPE getValidationType() {
-    return null;
+    return d.getValidationType();
+  }
+
+  @Override
+  public String getStaticPath(String path, String... vargs) {
+    return d.getStaticPath(path, vargs);
+  }
+
+  @Override
+  public void removeNullsAndEmpty(boolean removeNullFields, boolean removeEmptyObjects, boolean removeEmptyArrays) {
+    throw new UnifyException("jdoc_err_19");
   }
 
   @Override

@@ -16,12 +16,14 @@ package com.americanexpress.unify.jdocs;
 
 import com.americanexpress.unify.base.BaseUtils;
 import com.americanexpress.unify.base.UnifyException;
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import java.io.IOException;
 import java.math.BigDecimal;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
 
 import static com.americanexpress.unify.jdocs.CONSTS_JDOCS.VALIDATION_TYPE.*;
@@ -30,11 +32,31 @@ import static org.junit.jupiter.api.Assertions.*;
 /*
  * @author Deepak Arora
  */
-public class DocumentTest {
+class DocumentTest {
 
   @BeforeAll
-  private static void setup() {
-    JDocument.init();
+  static void setupBeforeAll() {
+    JDocument.init(new Initializer()
+                           .allowComments(true)
+                           .stripTrailingBigDecimalZeroes(false));
+    JDocument.configure(new Configurator()
+                                .defaultValidationPolicy(CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS)
+                                .docTypePrefixPolicy(new DocTypePrefixPolicyIgnoreForAll())
+                                .lineFeed("\n")
+                                .ignoreDocTypePrefixForBaseDocs(true)
+                                .deleteEmptyArray(true)
+                                .deleteEmptyObject(false));
+  }
+
+  @AfterEach
+  void setupBeforeEach() {
+    JDocument.configure(new Configurator()
+                                .defaultValidationPolicy(CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS)
+                                .docTypePrefixPolicy(new DocTypePrefixPolicyIgnoreForAll())
+                                .lineFeed("\n")
+                                .ignoreDocTypePrefixForBaseDocs(true)
+                                .deleteEmptyArray(true)
+                                .deleteEmptyObject(false));
   }
 
   private String getCompressedJson(String filePath) {
@@ -89,29 +111,29 @@ public class DocumentTest {
 
     d.deletePath("$.members[index=%].first_name", "0");
     assertFalse(d.pathExists("$.members[index=%].first_name", "0"));
-    assertEquals(d.getArraySize("$.members[0].phones[]"), 2);
+    assertEquals(2, d.getArraySize("$.members[0].phones[]"));
 
     d = new JDocument("sample_1_model", null);
-    assertEquals(d.getPrettyPrintJson(), "{ }");
+    assertEquals("{ }", d.getPrettyPrintJson());
 
     d = new JDocument();
     d.setString("$.house.family.father_name", "Deepak");
     boolean b = d.pathExists("$.house");
-    assertEquals(b, true);
+    assertEquals(true, b);
 
     d = new JDocument();
     d.setString("$.house[0].family.father_name", "Deepak");
     b = d.pathExists("$.house");
-    assertEquals(b, true);
+    assertEquals(true, b);
 
     b = d.isArray("$.house");
-    assertEquals(b, true);
+    assertEquals(true, b);
 
     b = d.isArray("$.house[]");
-    assertEquals(b, true);
+    assertEquals(true, b);
 
     b = d.isArray("$.house[0].family");
-    assertEquals(b, false);
+    assertEquals(false, b);
 
     d = new JDocument("[]");
     d.setString("$.[0].name", "Deepak");
@@ -192,7 +214,7 @@ public class DocumentTest {
     d1.merge(d2, null);
 
     // test out of bound
-    UnifyException e = assertThrows(UnifyException.class, () -> {
+    assertThrows(UnifyException.class, () -> {
       Document td = getTypedDocument("sample_8_model", "/jdocs/sample_8.json");
       td.getBigDecimal("$.values[10].val_1");
     });
@@ -291,7 +313,7 @@ public class DocumentTest {
 
     d.deletePath("$.members[0].phones[0]");
     int size = d.getArraySize("$.members[0].phones[]");
-    assertEquals(size, 1);
+    assertEquals(1, size);
 
     d.deletePath("$.members[sex=female]");
     b = d.pathExists("$.members[sex=female]");
@@ -335,23 +357,23 @@ public class DocumentTest {
     d.setArrayValueString("$.members[1].phones[0]", "1234");
 
     int size = d.getArraySize("$.members[]");
-    assertEquals(size, 5);
+    assertEquals(5, size);
 
     size = d.getArraySize("$.membasdfsdfers[]");
-    assertEquals(size, 0);
+    assertEquals(0, size);
 
     size = d.getArraySize("$.members[0].phones[]");
-    assertEquals(size, 2);
+    assertEquals(2, size);
 
     size = d.getArraySize("$.members[1].phones[]");
-    assertEquals(size, 1);
+    assertEquals(1, size);
 
     size = d.getArraySize("$.application[]");
-    assertEquals(size, 0);
+    assertEquals(0, size);
 
     d = getTypedDocument("sample_12_model", null);
     size = d.getArraySize("$.application.members[]");
-    assertEquals(size, 0);
+    assertEquals(0, size);
   }
 
   @Test
@@ -359,48 +381,48 @@ public class DocumentTest {
     Document d = getBaseDocument("/jdocs/native_array.json");
 
     int size = d.getArraySize("$.valid_states[0].states[]");
-    assertEquals(size, 5);
+    assertEquals(5, size);
 
     boolean pathExists = d.pathExists("$.valid_states[0].states[0]");
-    assertEquals(pathExists, true);
+    assertEquals(true, pathExists);
 
     pathExists = d.pathExists("$.valid_states[0].states[5]");
-    assertEquals(pathExists, false);
+    assertEquals(false, pathExists);
 
     String s = d.getArrayValueString("$.valid_states[0].states[0]");
-    assertEquals(s, "AZ");
+    assertEquals("AZ", s);
 
     s = d.getArrayValueString("$.valid_states[0].states[2]");
-    assertEquals(s, "NY");
+    assertEquals("NY", s);
 
     d.setArrayValueString("$.valid_states[0].states[3]", "GA1");
     s = d.getArrayValueString("$.valid_states[0].states[3]");
-    assertEquals(s, "GA1");
+    assertEquals("GA1", s);
 
     d.setArrayValueString("$.valid_states[0].states_1[0]", "AZ1");
     s = d.getArrayValueString("$.valid_states[0].states_1[0]");
-    assertEquals(s, "AZ1");
+    assertEquals("AZ1", s);
 
     d.setArrayValueInteger("$.valid_states[0].senators[0]", 20);
     int age = d.getArrayValueInteger("$.valid_states[0].senators[0]");
-    assertEquals(age, 20);
+    assertEquals(20, age);
 
     d = getTypedDocument("native_array1_model", "/jdocs/native_array1.json");
     s = d.getArrayValueString("$.codes[0]");
-    assertEquals(s, "V1");
+    assertEquals("V1", s);
     d.setArrayValueString("$.codes[0]", "0");
     s = d.getArrayValueString("$.codes[0]");
-    assertEquals(s, "0");
+    assertEquals("0", s);
     d.setArrayValueString("$.codes[3]", "3");
     s = d.getArrayValueString("$.codes[3]");
-    assertEquals(s, "3");
+    assertEquals("3", s);
   }
 
   @Test
   void testNativeArrayValue() {
     Document d = getBaseDocument("/jdocs/native_array2.json");
     String s = (String)d.getArrayValue("$.valid_states[0].states[0]");
-    assertEquals(s, "AZ");
+    assertEquals("AZ", s);
 
     Integer code = (Integer)d.getArrayValue("$.valid_states[0].codes[0]");
     assertEquals(code, Integer.valueOf(1));
@@ -419,7 +441,7 @@ public class DocumentTest {
     }
     catch (UnifyException e) {
       assertEquals(UnifyException.class, e.getClass());
-      assertEquals(e.getErrorCode(), "jdoc_err_22");
+      assertEquals("jdoc_err_22", e.getErrorCode());
     }
 
     fromDoc.deletePath("$.id");
@@ -482,15 +504,12 @@ public class DocumentTest {
     fromDoc = getBaseDocument("/jdocs/sample_25.json");
     toDoc = new JDocument("[]");
     toDoc.setContent(fromDoc, "$.addresses[]", "$.[]");
-    assertTrue(true);
 
     toDoc = new JDocument("[]");
     toDoc.setContent(fromDoc, "$.addresses", "$.[]");
-    assertTrue(true);
 
     toDoc = new JDocument();
     toDoc.setContent(fromDoc, "$.addresses", "$.addresses[]");
-    assertTrue(true);
 
     try {
       toDoc = new JDocument();
@@ -499,29 +518,30 @@ public class DocumentTest {
     catch (UnifyException e) {
       assertEquals(UnifyException.class, e.getClass());
     }
+    assertTrue(true);
   }
 
   @Test
   void testArrayIndex() {
     Document d = getTypedDocument("sample_3_model", "/jdocs/sample_3.json");
-    assertEquals(d.getArrayIndex("$.members[index=0]"), 0);
-    assertEquals(d.getArrayIndex("$.members[type=basic]"), 0);
-    assertEquals(d.getArrayIndex("$.members[index=1]"), 1);
-    assertEquals(d.getArrayIndex("$.members[type=supp]"), 1);
-    assertEquals(d.getArrayIndex("$.members[0].phones[type=home]"), 0);
-    assertEquals(d.getArrayIndex("$.members[1].phones[type=mobile]"), 1);
+    assertEquals(0, d.getArrayIndex("$.members[index=0]"));
+    assertEquals(0, d.getArrayIndex("$.members[type=basic]"));
+    assertEquals(1, d.getArrayIndex("$.members[index=1]"));
+    assertEquals(1, d.getArrayIndex("$.members[type=supp]"));
+    assertEquals(0, d.getArrayIndex("$.members[0].phones[type=home]"));
+    assertEquals(1, d.getArrayIndex("$.members[1].phones[type=mobile]"));
   }
 
   @Test
   void testDocumentValidation() {
     UnifyException e = assertThrows(UnifyException.class, () -> {
-      Document d = getTypedDocument("sample_3_model", "/jdocs/sample_3_err.json");
+      getTypedDocument("sample_3_model", "/jdocs/sample_3_err.json");
     });
     assertEquals("jdoc_err_28", e.getErrorCode());
   }
 
   @Test
-  void testMerge() throws IOException {
+  void testMerge() {
     Document fromDoc = getTypedDocument("sample_6_model", "/jdocs/sample_6_frag.json");
     Document toDoc = getTypedDocument("sample_6_model", "/jdocs/sample_6.json");
     toDoc.merge(fromDoc, null);
@@ -556,33 +576,33 @@ public class DocumentTest {
   }
 
   @Test
-  void testPathExists() throws IOException {
+  void testPathExists() {
     Document d = getTypedDocument("sample_1_model", "/jdocs/sample_1.json");
     boolean b = d.pathExists("$.info");
-    assertEquals(b, true);
+    assertEquals(true, b);
     b = d.pathExists("$.members[0].phones");
-    assertEquals(b, true);
+    assertEquals(true, b);
     b = d.pathExists("$.members[]");
-    assertEquals(b, true);
+    assertEquals(true, b);
     b = d.pathExists("$.members");
-    assertEquals(b, true);
+    assertEquals(true, b);
 
     d = getBaseDocument("/jdocs/sample_1.json");
     b = d.pathExists("$.members[]");
-    assertEquals(b, true);
+    assertEquals(true, b);
     b = d.pathExists("$.members");
-    assertEquals(b, true);
+    assertEquals(true, b);
     b = d.pathExists("$.apdsfgplicants");
-    assertEquals(b, false);
+    assertEquals(false, b);
 
     b = d.pathExists("$.members[3].phones");
-    assertEquals(b, false);
+    assertEquals(false, b);
     b = d.pathExists("$.members[0].laskdjfh");
-    assertEquals(b, false);
+    assertEquals(false, b);
   }
 
   @Test
-  void testSetArray() throws IOException {
+  void testSetArray() {
     Document d = getBaseDocument("/jdocs/sample_11.json");
     Document primary = new JDocument();
     primary.setContent(d, "$.members[0]", "$.members[0]");
@@ -594,7 +614,7 @@ public class DocumentTest {
   }
 
   @Test
-  void testSetArrayNull() throws IOException {
+  void testSetArrayNull() {
     Document d = getTypedDocument("sample_17_model", null);
     d.setString("$.version", null);
     d.setArrayValueString("$.names[0]", null);
@@ -603,6 +623,7 @@ public class DocumentTest {
 
     d = new JDocument();
     d.setString("$.version", null);
+    assertTrue(true);
   }
 
   @Test
@@ -645,12 +666,8 @@ public class DocumentTest {
 
   @Test
   void testRegex() {
-    //    Document d1 = getBaseDocument("/jdocs/sample_13_model.json");
-    //    String s = d1.getString("$.city");
-    //    Document d2 = new JDocument(s);
-    //    System.out.println(d2.getString("$.regex"));
-    Document d = getTypedDocument("sample_13_model", "/jdocs/sample_13.json");
-    assert (d != null);
+    getTypedDocument("sample_13_model", "/jdocs/sample_13.json");
+    assertTrue(true);
   }
 
   @Test
@@ -678,12 +695,12 @@ public class DocumentTest {
     // read a complex object
     json = d.getContent("$.header.transaction", false, true).getJson();
     assertEquals(json, getCompressedJson1("{\n" +
-            "  \"header\" : {\n" +
-            "    \"transaction\" : {\n" +
-            "      \"tid\" : \"tid\"\n" +
-            "    }\n" +
-            "  }\n" +
-            "}"));
+                                                  "  \"header\" : {\n" +
+                                                  "    \"transaction\" : {\n" +
+                                                  "      \"tid\" : \"tid\"\n" +
+                                                  "    }\n" +
+                                                  "  }\n" +
+                                                  "}"));
 
     // read the whole document
     json = d.getContent("$", false, true).getJson();
@@ -692,44 +709,44 @@ public class DocumentTest {
     // read a complex object inside of an array
     json = d.getContent("$.family.members[1].home_address", false, true).getJson();
     assertEquals(json, getCompressedJson1("{\n" +
-            "  \"family\" : {\n" +
-            "    \"members\" : [ {\n" +
-            "      \"home_address\" : {\n" +
-            "        \"line_1\" : \"Nitika address line 1\",\n" +
-            "        \"line_2\" : \"Nitika address line 2\"\n" +
-            "      }\n" +
-            "    } ]\n" +
-            "  }\n" +
-            "}"));
+                                                  "  \"family\" : {\n" +
+                                                  "    \"members\" : [ {\n" +
+                                                  "      \"home_address\" : {\n" +
+                                                  "        \"line_1\" : \"Nitika address line 1\",\n" +
+                                                  "        \"line_2\" : \"Nitika address line 2\"\n" +
+                                                  "      }\n" +
+                                                  "    } ]\n" +
+                                                  "  }\n" +
+                                                  "}"));
 
     // read an array element
     json = d.getContent("$.family.members[0].phones[1]", false, true).getJson();
     assertEquals(json, getCompressedJson1("{\n" +
-            "  \"family\" : {\n" +
-            "    \"members\" : [ {\n" +
-            "      \"phones\" : [ {\n" +
-            "        \"type\" : \"mobile\",\n" +
-            "        \"number\" : \"2222222222\"\n" +
-            "      } ]\n" +
-            "    } ]\n" +
-            "  }\n" +
-            "}"));
+                                                  "  \"family\" : {\n" +
+                                                  "    \"members\" : [ {\n" +
+                                                  "      \"phones\" : [ {\n" +
+                                                  "        \"type\" : \"mobile\",\n" +
+                                                  "        \"number\" : \"2222222222\"\n" +
+                                                  "      } ]\n" +
+                                                  "    } ]\n" +
+                                                  "  }\n" +
+                                                  "}"));
 
     // read the whole array
     json = d.getContent("$.family.members[0].phones[]", false, true).getJson();
     assertEquals(json, getCompressedJson1("{\n" +
-            "  \"family\" : {\n" +
-            "    \"members\" : [ {\n" +
-            "      \"phones\" : [ {\n" +
-            "        \"type\" : \"home\",\n" +
-            "        \"number\" : \"1111111111\"\n" +
-            "      }, {\n" +
-            "        \"type\" : \"mobile\",\n" +
-            "        \"number\" : \"2222222222\"\n" +
-            "      } ]\n" +
-            "    } ]\n" +
-            "  }\n" +
-            "}"));
+                                                  "  \"family\" : {\n" +
+                                                  "    \"members\" : [ {\n" +
+                                                  "      \"phones\" : [ {\n" +
+                                                  "        \"type\" : \"home\",\n" +
+                                                  "        \"number\" : \"1111111111\"\n" +
+                                                  "      }, {\n" +
+                                                  "        \"type\" : \"mobile\",\n" +
+                                                  "        \"number\" : \"2222222222\"\n" +
+                                                  "      } ]\n" +
+                                                  "    } ]\n" +
+                                                  "  }\n" +
+                                                  "}"));
 
     // read whole array but without full path -> note that this is not allowed
     try {
@@ -745,21 +762,21 @@ public class DocumentTest {
     // read a complex object
     json = d.getContent("$.info", true, true).getJson();
     assertEquals(json, getCompressedJson1("{\n" +
-            "  \"info\" : {\n" +
-            "    \"iid\" : null\n" +
-            "  }\n" +
-            "}\n"));
+                                                  "  \"info\" : {\n" +
+                                                  "    \"iid\" : null\n" +
+                                                  "  }\n" +
+                                                  "}\n"));
 
     // read a complex object inside of an array
     json = d.getContent("$.members[0].phones[0]", true, true).getJson();
     assertEquals(json, getCompressedJson1("{\n" +
-            "  \"members\" : [ {\n" +
-            "    \"phones\" : [ {\n" +
-            "      \"type\" : \"home\",\n" +
-            "      \"number\" : \"11111111111\"\n" +
-            "    } ]\n" +
-            "  } ]\n" +
-            "}\n"));
+                                                  "  \"members\" : [ {\n" +
+                                                  "    \"phones\" : [ {\n" +
+                                                  "      \"type\" : \"home\",\n" +
+                                                  "      \"number\" : \"11111111111\"\n" +
+                                                  "    } ]\n" +
+                                                  "  } ]\n" +
+                                                  "}\n"));
 
     // read a complex object inside of an array without full path -> note this is not allowed
     try {
@@ -777,17 +794,17 @@ public class DocumentTest {
     Document d = getTypedDocument("sample_1_model", "/jdocs/sample_1.json");
 
     DataType ldt = d.getLeafNodeDataType("$.members[0].first_name");
-    assertEquals(ldt.toString(), "string");
+    assertEquals("string", ldt.toString());
 
     ldt = d.getLeafNodeDataType("$.members[0].is_married");
-    assertEquals(ldt.toString(), "boolean");
+    assertEquals("boolean", ldt.toString());
   }
 
   @Test
   void testDate() {
     Document d = getTypedDocument("sample_18_model", null);
 
-    UnifyException e = assertThrows(UnifyException.class, () -> {
+    assertThrows(UnifyException.class, () -> {
       d.setString("$.ts", "1981-Feb-29");
     });
 
@@ -799,7 +816,7 @@ public class DocumentTest {
   void testEmptyArray() {
     Document d = getTypedDocument("sample_18_model", "/jdocs/sample_18_1.json");
     Integer number = d.getInteger("$.addresses[0].number");
-    assertEquals(number, null);
+    assertEquals(null, number);
   }
 
   @Test
@@ -807,8 +824,8 @@ public class DocumentTest {
     Document d = null;
 
     try {
-      d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json");
-      assert (false);
+      getTypedDocument("sample_23_model", "/jdocs/sample_23.json");
+      fail();
     }
     catch (Exception e) {
     }
@@ -817,42 +834,42 @@ public class DocumentTest {
 
     try {
       d.getString("$.phone_cell");
-      assert (false);
+      fail();
     }
     catch (Exception e) {
     }
 
     try {
       d.getString("$.giberish");
-      assert (false);
+      fail();
     }
     catch (Exception e) {
     }
 
     String s = d.getString("$.first_name");
-    assertEquals(s, "Deepak");
+    assertEquals("Deepak", s);
 
     d = getBaseDocument("/jdocs/sample_23.json");
 
     s = d.getString("$.giberish");
-    assertEquals(s, null);
+    assertEquals(null, s);
 
     s = d.getString("$.last_name");
-    assertEquals(s, "Arora");
+    assertEquals("Arora", s);
 
     s = d.getString("$.phone_home");
-    assertEquals(s, "1234");
+    assertEquals("1234", s);
 
     try {
       d.validateAllPaths("sample_23_model");
-      assert (false);
+      fail();
     }
     catch (Exception e) {
     }
 
     try {
       d.setType("sample_23_model");
-      assert (false);
+      fail();
     }
     catch (Exception e) {
     }
@@ -861,83 +878,85 @@ public class DocumentTest {
 
     try {
       d.validateAllPaths("sample_23_model");
-      assert (false);
+      fail();
     }
     catch (Exception e) {
     }
 
     // we now set the default to be true
-    JDocument.init(CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE);
+    JDocument.configure(new Configurator()
+                                .defaultValidationPolicy(CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE));
 
     d = getBaseDocument("/jdocs/sample_23.json");
     d.setType("sample_23_model"); // will not validate and hence no exception thrown
     try {
       d.validateAllPaths("sample_23_model"); // will fail validation here
-      assert (false);
+      fail();
     }
     catch (Exception e) {
     }
 
     try {
-      d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json"); // will fail validation here
-      assert (false);
+      getTypedDocument("sample_23_model", "/jdocs/sample_23.json"); // will fail validation here
+      fail();
     }
     catch (Exception e) {
     }
 
-    d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_AT_READ_WRITE); // this should pass
+    getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_AT_READ_WRITE); // this should pass
 
     // restore it back
-    JDocument.init(CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS);
+    JDocument.configure(new Configurator()
+                                .defaultValidationPolicy(ALL_DATA_PATHS));
   }
 
   @Test
   void testRootArray() {
     Document d = getBaseDocument("/jdocs/sample_20.json");
     int size = d.getArraySize("$.[]");
-    assertEquals(size, 2);
+    assertEquals(2, size);
 
     d = getTypedDocument("sample_20_model", "/jdocs/sample_20.json");
     size = d.getArraySize("$.[]");
-    assertEquals(size, 2);
+    assertEquals(2, size);
 
     String s = d.getString("$.[0].address.line_1");
-    assertEquals(s, "Happening road");
+    assertEquals("Happening road", s);
 
     s = d.getString("$.[0].cars[0].model");
-    assertEquals(s, "Accord");
+    assertEquals("CM1", s);
 
     s = d.getString("$.[0].cars[1].model");
-    assertEquals(s, "Camry");
+    assertEquals("CM2", s);
 
     s = d.getString("$.[1].cars[1].model");
-    assertEquals(s, null);
+    assertNull(s);
 
     d = new JDocument("{\n" +
-            "  \"response\": \"\",\n" +
-            "  \"status\": 500\n" +
-            "}");
+                              "  \"response\": \"\",\n" +
+                              "  \"status\": 500\n" +
+                              "}");
     boolean b = d.pathExists("$.[0].raw_response");
-    assertEquals(b, false);
+    assertFalse(b);
   }
 
   @Test
   void testRootNativeArray() {
     Document d = getBaseDocument("/jdocs/sample_21.json");
     int size = d.getArraySize("$.[]");
-    assertEquals(size, 3);
+    assertEquals(3, size);
 
     d = getTypedDocument("sample_21_model", "/jdocs/sample_21.json");
     size = d.getArraySize("$.[]");
-    assertEquals(size, 3);
+    assertEquals(3, size);
 
     String s = d.getArrayValueString("$.[0]");
-    assertEquals(s, "code_1");
+    assertEquals("code_1", s);
 
     s = d.getArrayValueString("$.[1]");
-    assertEquals(s, "code_2");
+    assertEquals("code_2", s);
 
-    UnifyException e = assertThrows(UnifyException.class, () -> {
+    assertThrows(UnifyException.class, () -> {
       Document td = getTypedDocument("sample_21_model", "/jdocs/sample_21.json");
       td.getArrayValueString("$.[6]");
     });
@@ -948,7 +967,7 @@ public class DocumentTest {
     String expected = BaseUtils.getResourceAsString(DocumentTest.class, "/jdocs/sample_19_expected.txt");
     expected = BaseUtils.getWithoutCarriageReturn(expected);
     try {
-      Document d = getTypedDocument("sample_19_model", "/jdocs/sample_19.json");
+      getTypedDocument("sample_19_model", "/jdocs/sample_19.json");
     }
     catch (UnifyException e) {
       String actual = BaseUtils.getWithoutCarriageReturn(e.getMessage());
@@ -999,7 +1018,7 @@ public class DocumentTest {
             "  },\n" +
             "  \"cars\": [\n" +
             "    {\n" +
-            "      \"make\": \"Honda\",\n" +
+            "      \"make\": \"CB1\",\n" +
             "      \"model\": null\n" +
             "    }\n" +
             "  ],\n" +
@@ -1087,7 +1106,7 @@ public class DocumentTest {
     Document d = getTypedDocument("sample_22_model", "/jdocs/sample_22.json");
     Document frag = getTypedDocument("sample_22_model", "/jdocs/sample_22_frag.json");
 
-    UnifyException e = assertThrows(UnifyException.class, () -> {
+    assertThrows(UnifyException.class, () -> {
       d.merge(frag, null);
     });
   }
@@ -1097,21 +1116,21 @@ public class DocumentTest {
     Document d = getTypedDocument("sample_22_model", "/jdocs/sample_22.json");
 
     boolean b = d.isLeafNode("$.addresses[0].block.field1");
-    assertEquals(b, true);
+    assertEquals(true, b);
 
     b = d.isLeafNode("$.addresses[0].block");
-    assertEquals(b, false);
+    assertEquals(false, b);
 
     b = d.isLeafNode("$.addresses[0]");
-    assertEquals(b, false);
+    assertEquals(false, b);
 
     b = d.isLeafNode("$.addresses");
-    assertEquals(b, false);
+    assertEquals(false, b);
 
     b = d.isLeafNode("$.addresses[0].block");
-    assertEquals(b, false);
+    assertEquals(false, b);
 
-    UnifyException e = assertThrows(UnifyException.class, () -> {
+    assertThrows(UnifyException.class, () -> {
       d.isLeafNode("$.addresses12345[0].block");
     });
 
@@ -1133,14 +1152,13 @@ public class DocumentTest {
     catch (UnifyException e) {
       b = false;
     }
-    assertEquals(false, b);
+    assertFalse(b);
 
     // index out of bound
     list.clear();
     d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
     list.add("$.members[2]");
     d.merge(appFrag, list);
-    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
     list.clear();
     d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
 
@@ -1153,33 +1171,33 @@ public class DocumentTest {
     catch (UnifyException e) {
       b = false;
     }
-    assertEquals(false, b);
+    assertFalse(b);
 
     list.clear();
     d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
     list.add("$.members[type=basic].phones[type=home].number");
     d.merge(appFrag, list);
-    assertEquals(false, d.pathExists("$.members[type=basic].phones[type=home].number"));
+    assertFalse(d.pathExists("$.members[type=basic].phones[type=home].number"));
 
     list.clear();
     d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
     list.add("$.members[0].phones[type=mobile].number");
     d.merge(appFrag, list);
-    assertEquals(false, d.pathExists("$.members[0].phones[type=mobile].number"));
+    assertFalse(d.pathExists("$.members[0].phones[type=mobile].number"));
 
     list.clear();
     d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
     list.add("$.members[0].phones[type=mobile]");
     d.merge(appFrag, list);
-    assertEquals(false, d.pathExists("$.members[0].phones[type=mobile]"));
-    assertEquals(false, d.pathExists("$.members[0].phones[1]"));
+    assertFalse(d.pathExists("$.members[0].phones[type=mobile]"));
+    assertFalse(d.pathExists("$.members[0].phones[1]"));
 
     list.clear();
     d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
     list.add("$.members[type=supp].phones[type=mobile]");
     d.merge(appFrag, list);
-    assertEquals(false, d.pathExists("$.members[1].phones[type=mobile]"));
-    assertEquals(false, d.pathExists("$.members[1].phones[1]"));
+    assertFalse(d.pathExists("$.members[1].phones[type=mobile]"));
+    assertFalse(d.pathExists("$.members[1].phones[1]"));
 
     list.clear();
     d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
@@ -1190,9 +1208,9 @@ public class DocumentTest {
     list.add("$.members[first_name=Chini].phones[type=home].number");
     list.add("$.members[2].phones[type=mobile].number");
     d.merge(appFrag, list);
-    assertEquals(false, d.pathExists("$.members[first_name=Chintu].phones[type=mobile]"));
-    assertEquals(false, d.pathExists("$.members[first_name=jenny].phones[1]"));
-    assertEquals(false, d.pathExists("$.members[2].phones[1]"));
+    assertFalse(d.pathExists("$.members[first_name=Chintu].phones[type=mobile]"));
+    assertFalse(d.pathExists("$.members[first_name=jenny].phones[1]"));
+    assertFalse(d.pathExists("$.members[2].phones[1]"));
     list.add("$.members[first_name=Jenny].phones[type=mobile].number");
     list.add("$.members[first_name=Chini].phones[type=home].number");
 
@@ -1201,7 +1219,7 @@ public class DocumentTest {
     list.add("$.members[first_name=ufiedoep].phones[1]");
     list.add("$.members[3].phones[0]");
     d.merge(appFrag, list);
-    assertEquals(false, d.pathExists("$.members[3].phones[1]"));
+    assertFalse(d.pathExists("$.members[3].phones[1]"));
 
     list.clear();
     d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
@@ -1212,9 +1230,9 @@ public class DocumentTest {
     d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
     list.add("$.members[0].last_name");
     d.merge(appFrag, list);
-    assertEquals(false, d.pathExists("$.members[0].last_name"));
+    assertFalse(d.pathExists("$.members[0].last_name"));
     list.clear();
-    d = getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
+    getTypedDocument("sample_24_model", "/jdocs/sample_24.json");
   }
 
   @Test
@@ -1223,29 +1241,24 @@ public class DocumentTest {
     Document d = new JDocument("sample_26_model", null);
 
     d.setString("$.id1", "GO2");
-    assertEquals(true, true);
 
-    UnifyException e = assertThrows(UnifyException.class, () -> {
+    assertThrows(UnifyException.class, () -> {
       d.setString("$.id1", "");
     });
 
     d.setString("$.id2", "");
-    assertEquals(true, true);
 
     d.setString("$.id2", "GNA");
-    assertEquals(true, true);
 
-    e = assertThrows(UnifyException.class, () -> {
+    assertThrows(UnifyException.class, () -> {
       d.setString("$.id2", "hhh");
     });
 
     d.setString("$.id3", "2023-Jan-26");
-    assertEquals(true, true);
 
     d.setString("$.id3", "");
-    assertEquals(true, true);
 
-    e = assertThrows(UnifyException.class, () -> {
+    assertThrows(UnifyException.class, () -> {
       d.setString("$.id4", "");
     });
   }
@@ -1264,9 +1277,9 @@ public class DocumentTest {
     d.setType("sample_26_model", CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE);
     try {
       d.getString("$.id1");
+      fail();
     }
     catch (Exception e) {
-      assertEquals(true, true);
     }
 
     d = new JDocument();
@@ -1274,9 +1287,9 @@ public class DocumentTest {
 
     try {
       d.setType("sample_26_model", CONSTS_JDOCS.VALIDATION_TYPE.ALL_DATA_PATHS);
+      fail();
     }
     catch (Exception e) {
-      assertEquals(true, true);
     }
   }
 
@@ -1286,8 +1299,8 @@ public class DocumentTest {
 
     // test - will fail
     try {
-      d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ALL_DATA_PATHS);
-      assert (false);
+      getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ALL_DATA_PATHS);
+      fail();
     }
     catch (Exception e) {
     }
@@ -1296,7 +1309,7 @@ public class DocumentTest {
     d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_MODEL_PATHS);
     try {
       d.getString("$.phone_cell");
-      assert (false);
+      fail();
     }
     catch (Exception e) {
     }
@@ -1305,26 +1318,26 @@ public class DocumentTest {
     d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_AT_READ_WRITE);
     try {
       d.getString("$.phone_cell");
-      assert (false);
+      fail();
     }
     catch (Exception e) {
     }
 
     // valid test
     String s = d.getString("$.first_name");
-    assertEquals(s, "Deepak");
+    assertEquals("Deepak", s);
 
     // above tests but this time using set type / validate methods
     d = getBaseDocument("/jdocs/sample_23.json");
 
     s = d.getString("$.giberish");
-    assertEquals(s, null);
+    assertEquals(null, s);
 
     s = d.getString("$.last_name");
-    assertEquals(s, "Arora");
+    assertEquals("Arora", s);
 
     s = d.getString("$.phone_home");
-    assertEquals(s, "1234");
+    assertEquals("1234", s);
 
     // try to validate a base document against a model - will succeed
     d.validateModelPaths("sample_23_model");
@@ -1332,7 +1345,7 @@ public class DocumentTest {
     // set type by default - will throw exception
     try {
       d.setType("sample_23_model");
-      assert (false);
+      fail();
     }
     catch (Exception e) {
     }
@@ -1343,62 +1356,66 @@ public class DocumentTest {
     // now validate all paths - will fail
     try {
       d.validateAllPaths("sample_23_model");
-      assert (false);
+      fail();
     }
     catch (Exception e) {
     }
 
     // we now set the default to only at read write
-    JDocument.init(ONLY_AT_READ_WRITE);
+    JDocument.configure(new Configurator()
+                                .defaultValidationPolicy(CONSTS_JDOCS.VALIDATION_TYPE.ONLY_AT_READ_WRITE));
 
     d = getBaseDocument("/jdocs/sample_23.json");
     d.setType("sample_23_model"); // will not validate and hence no exception thrown
     try {
       d.validateAllPaths("sample_23_model"); // will fail validation here
-      assert (false);
+      fail();
     }
     catch (Exception e) {
     }
     d.validateModelPaths("sample_23_model"); // will succeed
 
     try {
-      d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json"); // will fail validation here
-      assert (false);
+      getTypedDocument("sample_23_model", "/jdocs/sample_23.json"); // will fail validation here
+      fail();
     }
     catch (Exception e) {
     }
 
-    d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_MODEL_PATHS); // this should pass
-    d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_AT_READ_WRITE); // this should pass
+    getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_MODEL_PATHS); // this should pass
+    getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_AT_READ_WRITE); // this should pass
 
     // restore it back
-    JDocument.init(ALL_DATA_PATHS);
+    JDocument.configure(new Configurator()
+                                .defaultValidationPolicy(ALL_DATA_PATHS));
 
-    // we now set the default to model validation
-    JDocument.init(ONLY_MODEL_PATHS);
+    // set it to a different value
+    JDocument.configure(new Configurator()
+                                .defaultValidationPolicy(ONLY_MODEL_PATHS));
 
     d = getBaseDocument("/jdocs/sample_23.json");
     d.setType("sample_23_model"); // will validate and hence no exception thrown
     try {
       d.validateAllPaths("sample_23_model"); // will fail validation here
-      assert (false);
+      fail();
     }
     catch (Exception e) {
     }
     d.validateModelPaths("sample_23_model"); // will succeed
 
     try {
-      d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json"); // will fail validation here
-      assert (false);
+      getTypedDocument("sample_23_model", "/jdocs/sample_23.json"); // will fail validation here
+      fail();
     }
     catch (Exception e) {
     }
 
-    d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_MODEL_PATHS); // this should pass
-    d = getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_AT_READ_WRITE); // this should pass
+    getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_MODEL_PATHS); // this should pass
+    getTypedDocument("sample_23_model", "/jdocs/sample_23.json", ONLY_AT_READ_WRITE); // this should pass
 
     // restore it back
-    JDocument.init(ALL_DATA_PATHS);
+    JDocument.configure(new Configurator()
+                                .defaultValidationPolicy(ALL_DATA_PATHS));
   }
 
   @Test
@@ -1406,29 +1423,29 @@ public class DocumentTest {
     Document d = new JDocument();
 
     try {
-      String s = d.getString("$.names[name=%].first_name");
-      assert (false);
+      d.getString("$.names[name=%].first_name");
+      fail();
     }
     catch (Exception e) {
     }
 
     try {
-      String s = d.getString("$.names[name=%].other[number=%].first_name");
-      assert (false);
+      d.getString("$.names[name=%].other[number=%].first_name");
+      fail();
     }
     catch (Exception e) {
     }
 
     try {
-      String s = d.getString("$.names[name=%].other[number=%].first_name", "Deepak");
-      assert (false);
+      d.getString("$.names[name=%].other[number=%].first_name", "Deepak");
+      fail();
     }
     catch (Exception e) {
     }
 
     try {
-      String s = d.getString("$.names[%].first_name");
-      assert (false);
+      d.getString("$.names[%].first_name");
+      fail();
     }
     catch (Exception e) {
     }
@@ -1439,24 +1456,540 @@ public class DocumentTest {
   void testNumber() {
     try {
       // all primitive types at root are valid JSONs
-      Document d = new JDocument("14");
+      new JDocument("14");
       // use below to read the value of such a JSON document
       // String s = d.getJson();
       // long value = Long.valueOf(s);
-      d = new JDocument("14.1");
-      d = new JDocument("true");
-      d = new JDocument("\"hello\"");
+      new JDocument("14.1");
+      new JDocument("true");
+      new JDocument("\"hello\"");
     }
     catch (Exception e) {
-      assert(false);
+      fail();
+    }
+  }
+
+  @Test
+  void testDelim() {
+    // a placeholder to run any temporary test
+    JDocument d = (JDocument)getBaseDocument("/jdocs/delim.json");
+    d.getString("$.id");
+    assertTrue(true);
+  }
+
+  @Test
+  void testDocumentMinMaxLengthValidation() {
+    UnifyException e = assertThrows(UnifyException.class, () -> {
+      getTypedDocument("sample_27_model", "/jdocs/sample_27_1.json");
+    });
+    assertEquals("jdoc_err_28", e.getErrorCode());
+    String s = BaseUtils.removeWhiteSpaces("Max length validation failed for path -> $.addresses[1].line_1\n" +
+                                                   "Min length validation failed for path -> $.addresses[2].line_1\n");
+    assertEquals(s, BaseUtils.removeWhiteSpaces(e.getMessage()));
+  }
+
+  @Test
+  void testDocumentMinMaxValueValidationInteger() {
+    UnifyException e = assertThrows(UnifyException.class, () -> {
+      getTypedDocument("sample_27_model", "/jdocs/sample_27_2.json");
+    });
+    assertEquals("jdoc_err_28", e.getErrorCode());
+    String s = BaseUtils.removeWhiteSpaces("Min value validation failed for path -> $.test[3].int_no\n" +
+                                                   "Max value validation failed for path -> $.test[4].int_no\n");
+    assertEquals(s, BaseUtils.removeWhiteSpaces(e.getMessage()));
+  }
+
+  @Test
+  void testDocumentMinMaxValueValidationLong() {
+    UnifyException e = assertThrows(UnifyException.class, () -> {
+      getTypedDocument("sample_27_model", "/jdocs/sample_27_3.json");
+    });
+    assertEquals("jdoc_err_28", e.getErrorCode());
+    String s = BaseUtils.removeWhiteSpaces("Min value validation failed for path -> $.test[3].long_no\n" +
+                                                   "Max value validation failed for path -> $.test[4].long_no\n");
+    assertEquals(s, BaseUtils.removeWhiteSpaces(e.getMessage()));
+  }
+
+  @Test
+  void testDocumentMinMaxValueValidationDecimal() {
+    UnifyException e = assertThrows(UnifyException.class, () -> {
+      getTypedDocument("sample_27_model", "/jdocs/sample_27_4.json");
+    });
+    assertEquals("jdoc_err_28", e.getErrorCode());
+    String s = BaseUtils.removeWhiteSpaces("Min value validation failed for path -> $.test[3].decimal_no\n" +
+                                                   "Max value validation failed for path -> $.test[4].decimal_no\n");
+    assertEquals(s, BaseUtils.removeWhiteSpaces(e.getMessage()));
+  }
+
+  @Test
+  void testDocumentMinMaxDateValidation1() {
+    UnifyException e = assertThrows(UnifyException.class, () -> {
+      getTypedDocument("sample_27_model", "/jdocs/sample_27_5_1.json");
+    });
+    assertEquals("jdoc_err_28", e.getErrorCode());
+    String s = BaseUtils.removeWhiteSpaces("Min date validation failed for path -> $.test[3].date_1\n" +
+                                                   "Max date validation failed for path -> $.test[4].date_1\n");
+    assertEquals(s, BaseUtils.removeWhiteSpaces(e.getMessage()));
+  }
+
+  @Test
+  void testDocumentMinMaxDateValidation2() {
+    UnifyException e = assertThrows(UnifyException.class, () -> {
+      getTypedDocument("sample_27_model", "/jdocs/sample_27_5_2.json");
+    });
+    assertEquals("jdoc_err_28", e.getErrorCode());
+    String s = BaseUtils.removeWhiteSpaces("Min date validation failed for path -> $.test[3].date_2\n" +
+                                                   "Max date validation failed for path -> $.test[4].date_2\n");
+    assertEquals(s, BaseUtils.removeWhiteSpaces(e.getMessage()));
+  }
+
+  @Test
+  void testDocumentMinMaxDateValidation3() {
+    UnifyException e = assertThrows(UnifyException.class, () -> {
+      getTypedDocument("sample_27_model", "/jdocs/sample_27_5_3.json");
+    });
+    assertEquals("jdoc_err_28", e.getErrorCode());
+    String s = BaseUtils.removeWhiteSpaces("Min date validation failed for path -> $.test[3].date_3\n" +
+                                                   "Max date validation failed for path -> $.test[4].date_3\n");
+    assertEquals(s, BaseUtils.removeWhiteSpaces(e.getMessage()));
+  }
+
+  @Test
+  void testLoadLong() {
+    Document d = getTypedDocument("sample_28_model", "/jdocs/sample_28.json", ALL_DATA_PATHS);
+    Long val = d.getLong("$.test.long_no");
+    assertEquals(5000, val);
+  }
+
+  @Test
+  void testSetContentAcrossDocTypes() {
+    Document fromDoc = getTypedDocument("sample_29_from_model", "/jdocs/sample_29_from.json", ALL_DATA_PATHS);
+    Document toDoc = getTypedDocument("sample_29_to_model", "/jdocs/sample_29_to.json", ALL_DATA_PATHS);
+    toDoc.setContent(fromDoc, "$.level_from.level_2.level_3", "$.level_to.level_2.level_3");
+    assertEquals("field_1", toDoc.getString("$.level_to.level_2.level_3.field_1"));
+    assertEquals("field_2", toDoc.getString("$.level_to.level_2.level_3.field_2"));
+    assertEquals("val_6", toDoc.getString("$.level_to.level_2.level_3.field_to_1"));
+    assertEquals("val_7", toDoc.getString("$.level_to.level_2.level_3.field_to_2"));
+  }
+
+  @Test
+  void testDocTypePrefix() {
+    // first check with the doc prefix policy set to ignore all
+    // check with a typed document
+    Document d = getTypedDocument("sample_1_model", "/jdocs/sample_1.json");
+    assertEquals("Deepak", d.getString("$.members[0].first_name"));
+    assertEquals("Deepak", d.getString("sample_1_model$.members[0].first_name"));
+    try {
+      d.getString("xyz$.members[0].first_name");
+      fail();
+    }
+    catch (Exception e) {
+    }
+
+    // check for a base document
+    d = getBaseDocument("/jdocs/sample_1.json");
+    assertEquals("Deepak", d.getString("$.members[0].first_name"));
+    try {
+      d.getString("sample_1_model$.members[0].first_name");
+    }
+    catch (Exception e) {
+      fail();
+    }
+
+    // set
+    JDocument.configure(new Configurator()
+                                .docTypePrefixPolicy(new DocTypePrefixPolicyEnforceForAll()));
+
+    // check with a typed document
+    d = getTypedDocument("sample_1_model", "/jdocs/sample_1.json");
+    assertEquals("Deepak", d.getString("sample_1_model$.members[0].first_name"));
+    try {
+      d.getString("$.members[0].first_name");
+      fail();
+    }
+    catch (Exception e) {
+    }
+
+    // restore
+    JDocument.configure(new Configurator()
+                                .docTypePrefixPolicy(new DocTypePrefixPolicyIgnoreForAll()));
+
+    // set - check with a base document setting the flag to false
+    JDocument.configure(new Configurator()
+                                .ignoreDocTypePrefixForBaseDocs(false));
+    d = getBaseDocument("/jdocs/sample_1.json");
+    assertEquals("Deepak", d.getString("$.members[0].first_name"));
+    try {
+      d.getString("xyz$.members[0].first_name");
+      fail();
+    }
+    catch (Exception e) {
+    }
+
+    // restore
+    JDocument.configure(new Configurator()
+                                .ignoreDocTypePrefixForBaseDocs(true));
+
+    // enforce for some test case
+    // set
+    JDocument.configure(new Configurator()
+                                .docTypePrefixPolicy(
+                                        new DocTypePrefixPolicyEnforceForSome(new HashSet<>(Arrays.asList("sample_1_model")))));
+
+    // check with a typed document
+    d = getTypedDocument("sample_1_model", "/jdocs/sample_1.json");
+    try {
+      d.getString("$.members[0].first_name");
+      fail();
+    }
+    catch (Exception e) {
+    }
+
+    try {
+      d = getTypedDocument("sample_3_model", "/jdocs/sample_3.json");
+      d.getString("$.id");
+    }
+    catch (Exception e) {
+      fail();
+    }
+
+    // restore
+    JDocument.configure(new Configurator()
+                                .docTypePrefixPolicy(new DocTypePrefixPolicyIgnoreForAll()));
+
+    // ignore for some test case
+    // set
+    JDocument.configure(new Configurator()
+                                .docTypePrefixPolicy(
+                                        new DocTypePrefixPolicyIgnoreForSome(new HashSet<>(Arrays.asList("sample_1_model")))));
+
+    // check with a typed document
+    d = getTypedDocument("sample_1_model", "/jdocs/sample_1.json");
+    try {
+      d.getString("$.members[0].first_name");
+    }
+    catch (Exception e) {
+      fail();
+    }
+
+    try {
+      d = getTypedDocument("sample_3_model", "/jdocs/sample_3.json");
+      d.getString("$.id");
+      fail();
+    }
+    catch (Exception e) {
+    }
+
+    // restore
+    JDocument.configure(new Configurator()
+                                .docTypePrefixPolicy(new DocTypePrefixPolicyIgnoreForAll()));
+
+  }
+
+  @Test
+  void testOverwritingNodes1() {
+    try {
+      JDocument d = new JDocument();
+      d.setString("$.car[0].name", "CB1");
+      d.setString("$.car.name", "CB1");
+      fail();
+    }
+    catch (Exception e) {
+    }
+  }
+
+  @Test
+  void testOverwritingNodes1_2() {
+    try {
+      JDocument d = new JDocument();
+      d.setString("$.car[0].name", "CB1");
+      d.setArrayValueString("$.car[1]", "CB1");
+    }
+    catch (Exception e) {
+      fail();
+    }
+  }
+
+  @Test
+  void testOverwritingNodes2() {
+    try {
+      JDocument d = new JDocument();
+      d.setString("$.car.name", "CB1");
+      d.setString("$.car[0].name", "CB1");
+      fail();
+    }
+    catch (Exception e) {
+    }
+  }
+
+  @Test
+  void testOverwritingNodes2_1() {
+    try {
+      JDocument d = new JDocument();
+      d.setString("$.car.name", "CB1");
+      d.setArrayValueString("$.car[0]", "CB1");
+      fail();
+    }
+    catch (Exception e) {
+    }
+  }
+
+  @Test
+  void testOverwritingNodes3() {
+    try {
+      JDocument d = new JDocument();
+      d.setString("$.car", "CB1");
+      d.setString("$.car.name", "CB1");
+      fail();
+    }
+    catch (Exception e) {
+    }
+  }
+
+  @Test
+  void testEmptyArrayOptions() {
+    try {
+      // empty array should be deleted
+      JDocument d = new JDocument();
+      d.setString("$.cars[0].name", "CB1");
+      d.deletePath("$.cars[0]");
+      assertEquals("{}", d.getJson());
+
+      // empty array should be deleted
+      d = new JDocument();
+      d.setArrayValueString("$.cars[0]", "CB1");
+      d.setArrayValueString("$.cars[1]", "CB3");
+      d.deletePath("$.cars[1]");
+      d.deletePath("$.cars[0]");
+      assertEquals("{}", d.getJson());
+
+      // empty array should be deleted
+      d = new JDocument();
+      d.setArrayValueString("$.application.address.home.cars[0]", "CB1");
+      d.deletePath("$.application.address.home.cars[0]");
+      assertEquals("{\"application\":{\"address\":{\"home\":{}}}}", d.getJson());
+
+      // set
+      JDocument.configure(new Configurator()
+                                  .deleteEmptyArray(false));
+      // empty array should remain
+      d = new JDocument();
+      d.setString("$.cars[0].name", "CB1");
+      d.deletePath("$.cars[0]");
+      assertEquals("{\"cars\":[]}", d.getJson());
+
+      // restore
+      JDocument.configure(new Configurator()
+                                  .deleteEmptyArray(true));
+    }
+    catch (Exception e) {
+      fail();
+    }
+  }
+
+  @Test
+  void testEmptyObjectOptions() {
+    try {
+      // test case - empty object should be retained
+      JDocument d = new JDocument();
+      d.setString("$.cars.eu.german.name", "Audi");
+      d.deletePath("$.cars.eu.german.name");
+      assertEquals("{\"cars\":{\"eu\":{\"german\":{}}}}", d.getJson());
+
+      // empty object should be retained
+      d = new JDocument();
+      d.setString("$.application.addresses[0].home.cars[0].name", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0].name");
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{\"cars\":[{}]}}]}}", d.getJson());
+
+      // empty object to be retained
+      d = new JDocument();
+      d.setArrayValueString("$.application.addresses[0].home.cars[0]", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0]");
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{}}]}}", d.getJson());
+
+      // set
+      JDocument.configure(new Configurator()
+                                  .deleteEmptyObject(true));
+
+      d = new JDocument();
+      d.setString("$.cars.eu.german.name", "Audi");
+      d.deletePath("$.cars.eu.german.name");
+      assertEquals("{}", d.getJson());
+
+      d = new JDocument();
+      d.setString("$.cars.eu.german.name", "Audi");
+      d.setString("$.cars.eu.italian.name", "Fiat");
+      d.deletePath("$.cars.eu.german.name");
+      assertEquals("{\"cars\":{\"eu\":{\"italian\":{\"name\":\"Fiat\"}}}}", d.getJson());
+
+      // restore
+      JDocument.configure(new Configurator()
+                                  .deleteEmptyObject(false));
+    }
+    catch (Exception e) {
+      fail();
+    }
+  }
+
+  @Test
+  void testEmptyArrayAndObjectOptions() {
+    try {
+      // set both to false
+      JDocument.configure(new Configurator()
+                                  .deleteEmptyObject(false));
+      JDocument.configure(new Configurator()
+                                  .deleteEmptyArray(false));
+
+      // empty objects / arrays should be retained
+      JDocument d = new JDocument();
+      d.setString("$.application.addresses[0].home.cars[0].name", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0].name");
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{\"cars\":[{}]}}]}}", d.getJson());
+
+      // empty objects / arrays should be retained
+      d = new JDocument();
+      d.setString("$.application.addresses[0].home.cars[0].name", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0]");
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{\"cars\":[]}}]}}", d.getJson());
+
+      // empty objects / arrays should be retained
+      d = new JDocument();
+      d.setArrayValueString("$.application.addresses[0].home.cars[0]", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0]");
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{\"cars\":[]}}]}}", d.getJson());
+
+      // set objects to false and arrays to true
+      JDocument.configure(new Configurator()
+                                  .deleteEmptyObject(false)
+                                  .deleteEmptyArray(true));
+
+      d = new JDocument();
+      d.setString("$.application.addresses[0].home.cars[0].name", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0].name");
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{\"cars\":[{}]}}]}}", d.getJson());
+
+      d = new JDocument();
+      d.setString("$.application.addresses[0].home.cars[0].name", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0]");
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{}}]}}", d.getJson());
+
+      d = new JDocument();
+      d.setArrayValueString("$.application.addresses[0].home.cars[0]", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0]");
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{}}]}}", d.getJson());
+
+      // set objects to true and arrays to false
+      JDocument.configure(new Configurator()
+                                  .deleteEmptyObject(true)
+                                  .deleteEmptyArray(false));
+
+      d = new JDocument();
+      d.setString("$.application.addresses[0].home.cars[0].name", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0].name");
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{\"cars\":[{}]}}]}}", d.getJson());
+
+      d = new JDocument();
+      d.setString("$.application.addresses[0].home.cars[0].name", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0]");
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{\"cars\":[]}}]}}", d.getJson());
+
+      d = new JDocument();
+      d.setArrayValueString("$.application.addresses[0].home.cars[0]", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0]");
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{\"cars\":[]}}]}}", d.getJson());
+
+      // set objects to true and arrays to true
+      JDocument.configure(new Configurator()
+                                  .deleteEmptyObject(true)
+                                  .deleteEmptyArray(true));
+
+      d = new JDocument();
+      d.setString("$.application.addresses[0].home.cars[0].name", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0].name");
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{\"cars\":[{}]}}]}}", d.getJson());
+
+      d = new JDocument();
+      d.setString("$.application.addresses[0].home.cars[0].name", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0]");
+      assertEquals("{\"application\":{\"addresses\":[{}]}}", d.getJson());
+
+      d = new JDocument();
+      d.setArrayValueString("$.application.addresses[0].home.cars[0]", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0]");
+      assertEquals("{\"application\":{\"addresses\":[{}]}}", d.getJson());
+
+      // some other test cases
+      d = new JDocument();
+      d.setString("$.application.addresses[0].home.cars[0].name", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0].name");
+      d.deletePath("$.application.addresses[0].home.cars");
+      d.deletePath("$.application.addresses[0].home");
+      assertEquals("{\"application\":{\"addresses\":[{}]}}", d.getJson());
+
+      // Test case for mixed empty arrays and objects
+      d = new JDocument();
+      d.setArrayValueString("$.application.addresses[0].home.cars[0]", "CB1");
+      d.deletePath("$.application.addresses[0].home.cars[0]");
+      d.deletePath("$.application.addresses[0].home");
+      assertEquals("{\"application\":{\"addresses\":[{}]}}", d.getJson());
+
+      // restore
+      JDocument.configure(new Configurator()
+                                  .deleteEmptyObject(false)
+                                  .deleteEmptyArray(true));
+    }
+    catch (Exception e) {
+      fail();
+    }
+  }
+
+  @Test
+  void testRemoveNullsAndEmpty() {
+    try {
+      JDocument d = (JDocument)getBaseDocument("/jdocs/sample_31.json");
+
+      JDocument td = (JDocument)d.deepCopy();
+      td.removeNullsAndEmpty(false, false, false);
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{\"cars\":[{\"name\":\"CB1\"},{},{\"name\":\"CB3\",\"model_info\":{},\"spec_info\":{\"field\":null},\"emails\":[]}]}}],\"name\":{},\"emails\":[]}}", td.getJson());
+
+      td = (JDocument)d.deepCopy();
+      td.removeNullsAndEmpty(true, false, false);
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{\"cars\":[{\"name\":\"CB1\"},{},{\"name\":\"CB3\",\"model_info\":{},\"spec_info\":{},\"emails\":[]}]}}],\"name\":{},\"emails\":[]}}", td.getJson());
+
+      td = (JDocument)d.deepCopy();
+      td.removeNullsAndEmpty(false, true, false);
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{\"cars\":[{\"name\":\"CB1\"},{},{\"name\":\"CB3\",\"spec_info\":{\"field\":null},\"emails\":[]}]}}],\"emails\":[]}}", td.getJson());
+
+      td = (JDocument)d.deepCopy();
+      td.removeNullsAndEmpty(false, false, true);
+      assertEquals("{\"application\":{\"addresses\":[{\"home\":{\"cars\":[{\"name\":\"CB1\"},{},{\"name\":\"CB3\",\"model_info\":{},\"spec_info\":{\"field\":null}}]}}],\"name\":{}}}", td.getJson());
+
+      d = (JDocument)getBaseDocument("/jdocs/sample_32.json");
+      td = (JDocument)d.deepCopy();
+      td.removeNullsAndEmpty(false, false, false);
+      assertEquals("{\"employee\":{\"name\":\"John\",\"address\":{},\"cars\":[],\"boats\":[null,\"athena\",null],\"bikes\":[{\"parts\":[{},{},{\"name\":\"engine\",\"spec\":null}]}]}}", td.getJson());
+
+      td = (JDocument)d.deepCopy();
+      td.removeNullsAndEmpty(true, false, false);
+      assertEquals("{\"employee\":{\"name\":\"John\",\"address\":{},\"cars\":[],\"boats\":[null,\"athena\",null],\"bikes\":[{\"parts\":[{},{},{\"name\":\"engine\"}]}]}}", td.getJson());
+
+      td = (JDocument)d.deepCopy();
+      td.removeNullsAndEmpty(true, true, false);
+      assertEquals("{\"employee\":{\"name\":\"John\",\"cars\":[],\"boats\":[null,\"athena\",null],\"bikes\":[{\"parts\":[{},{},{\"name\":\"engine\"}]}]}}", td.getJson());
+
+      td = (JDocument)d.deepCopy();
+      td.removeNullsAndEmpty(true, true, true);
+      assertEquals("{\"employee\":{\"name\":\"John\",\"boats\":[null,\"athena\",null],\"bikes\":[{\"parts\":[{},{},{\"name\":\"engine\"}]}]}}", td.getJson());
+    }
+    catch (Exception e) {
+      fail();
     }
   }
 
   @Test
   void testTemp() {
-    JDocument d = (JDocument)getBaseDocument("/jdocs/temp.json");
-    String s = d.getString("$.id");
-    System.out.println(s);
+    // nothing to do as this is just a placeholder
   }
 
 }
